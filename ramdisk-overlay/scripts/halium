@@ -271,14 +271,7 @@ resize_userdata_if_needed() {
 	path=$1
 
 	# Partition size in 1k blocks
-	case $path in
-	/dev/mmcblk*)
-		pblocks=$(grep ${path#/dev/*} /proc/partitions | awk {'print $3'})
-		;;
-	/dev/disk*)
-		pblocks=$(grep $(basename $(readlink $path)) /proc/partitions | awk {'print $3'})
-		;;
-	esac
+	pblocks=$(grep ${path##*/} /proc/partitions | awk {'print $3'})
 	# Filesystem size in 4k blocks
 	fsblocks=$(dumpe2fs -h $path | grep "Block count" | awk {'print $3'})
 	# Difference between the reported sizes in 1k blocks
