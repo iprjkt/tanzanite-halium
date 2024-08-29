@@ -44,7 +44,7 @@ load-module module-null-source source_name=source.fake.sco rate=8000 channels=1
 
 ### Load Pulseaudio Droid module built for API 30
 .ifexists module-droid-card-30.so
-load-module module-droid-card-30 output_deep_buffer=false hw_volume=false rate=48000
+load-module module-droid-card-30 output_deep_buffer=false hw_volume=false voice_virtual_stream=true rate=48000
 .endif
 
 ### Automatically load the trust-store module
