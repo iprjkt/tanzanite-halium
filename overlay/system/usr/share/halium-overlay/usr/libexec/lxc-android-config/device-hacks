@@ -9,7 +9,7 @@ while [ "$(getprop vendor.mtk.nvram.ready)" != "1" ]; do sleep 0.2; done
 
 # enable Wi-Fi adapter in client mode
 while [ ! -e /dev/wmtWifi ]; do sleep 0.2; done
-echo S > /dev/wmtWifi
+echo P > /dev/wmtWifi
 
 # set wifi.interface property since urfkill.conf expects that
 setprop wifi.interface wlan0
@@ -17,3 +17,7 @@ setprop wifi.interface wlan0
 # Enable WoWLAN to avoid network disconnect before suspend
 while [ ! -e /sys/class/ieee80211/phy0 ]; do sleep 1; done
 iw phy phy0 wowlan enable magic-packet
+
+# enables wireless display support
+setprop debug.stagefright.c2inputsurface 1
+setprop ubuntu.widi.supported 1
