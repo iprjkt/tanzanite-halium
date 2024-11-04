@@ -15,6 +15,4 @@ vidofnir:
     - true
   MirAndroidPlatformClientEglFlush:
     - all
-  OfonoPlugin: binder
-  OfonoImplementsIms: true
   VibrateDurationExtraMs: 40
