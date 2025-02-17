@@ -25,8 +25,8 @@ devel-bootloader-flashable:
       cd lpunpack_and_lpmake && ./make.sh
     ) &
     (
-      wget --no-verbose https://volla.tech/filedump/ubuntu-touch-vidofnyr-firmware-s.tar.xz
-      tar xvJf ubuntu-touch-vidofnyr-firmware-s.tar.xz
+      wget --no-verbose https://volla.tech/filedump/ubuntu-touch-vidofnir-firmware-s-gx4pro.tar.xz
+      tar xvJf ubuntu-touch-vidofnir-firmware-s-gx4pro.tar.xz
     ) &
     # Use wait -n so that errors are propagated.
     wait -n
