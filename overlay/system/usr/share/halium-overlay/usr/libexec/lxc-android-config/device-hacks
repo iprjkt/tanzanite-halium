@@ -21,6 +21,3 @@ iw phy phy0 wowlan enable magic-packet
 # enables wireless display support
 setprop debug.stagefright.c2inputsurface 1
 setprop ubuntu.widi.supported 1
-
-# disable VoLTE until UT has vendor services implementation to fix LTE
-setprop persist.vendor.mtk.volte.enable 0
