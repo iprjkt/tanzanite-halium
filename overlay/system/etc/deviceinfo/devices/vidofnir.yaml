@@ -18,3 +18,4 @@ vidofnir:
   OfonoPlugin: binder
   OfonoImplementsIms: true
   VibrateDurationExtraMs: 40
+  SingleColorLedSysfsPath: /sys/class/leds/green
