@@ -19,3 +19,4 @@ vidofnir:
   OfonoImplementsIms: true
   VibrateDurationExtraMs: 40
   SingleColorLedSysfsPath: /sys/class/leds/green
+  PulseaudioModulesDroid_ExtraCardArgs: "hw_volume=false rate=48000"
