@@ -7,14 +7,6 @@ vidofnir:
     - Portrait
     - Landscape
     - InvertedLandscape
-  MirAndroidPlatformServerPartialUpdates:
-    - false
-  MirAndroidPlatformServerBackpressure:
-    - true
-  MirAndroidPlatformServerEglSync:
-    - true
-  MirAndroidPlatformClientEglFlush:
-    - all
   OfonoPlugin: binder
   OfonoImplementsIms: true
   VibrateDurationExtraMs: 40
