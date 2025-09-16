@@ -4,5 +4,7 @@ ro.product.manufacturer=Volla
 ro.product.vendor.manufacturer=Volla
 ro.product.model=Phone X23
 ro.product.vendor.model=Phone X23
+# Use Mali GLES directly instead of hacky/semi-broken MediaTek MEOW wrapper
+ro.hardware.egl=mali
 # Enable rear wide angle lens
 ro.odm.camera=1
