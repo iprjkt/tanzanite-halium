@@ -120,6 +120,7 @@ charger_class.ko
 adapter_class.ko
 mtk_charger_algorithm_class.ko
 tcpc_class.ko
+extcon-mtk-usb.ko
 sc8551.ko
 sc89601a_charger.ko
 sm5602_fg.ko
@@ -129,7 +130,6 @@ mtk_chg_type_det.ko
 mtk_pd_adapter.ko
 mtk_pd_charging.ko
 mtk_charger_framework.ko
-extcon-mtk-usb.ko
 tcpci_late_sync.ko
 mt6358_battery.ko
 pwm-mtk-disp.ko
