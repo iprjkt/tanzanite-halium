@@ -185,6 +185,8 @@ alias of:N*T*Cmediatek,mt6761-disp-pwm pwm_mtk_disp
 alias of:N*T*Cmediatek,mt6761-disp-pwmC* pwm_mtk_disp
 alias of:N*T*Cmediatek,mt6739-disp-pwm pwm_mtk_disp
 alias of:N*T*Cmediatek,mt6739-disp-pwmC* pwm_mtk_disp
+alias of:N*T*Cmediatek,mt6885-disp-pwm pwm_mtk_disp
+alias of:N*T*Cmediatek,mt6885-disp-pwmC* pwm_mtk_disp
 alias of:N*T*Cmediatek,mt6357-dynamic_loading_throttling mtk_dynamic_loading_throttling
 alias of:N*T*Cmediatek,mt6357-dynamic_loading_throttlingC* mtk_dynamic_loading_throttling
 alias of:N*T*Cmediatek,mt6358-dynamic_loading_throttling mtk_dynamic_loading_throttling
@@ -237,6 +239,8 @@ alias of:N*T*Cmediatek,extcon-usb extcon_mtk_usb
 alias of:N*T*Cmediatek,extcon-usbC* extcon_mtk_usb
 alias of:N*T*Cmediatek,usb_meta meta
 alias of:N*T*Cmediatek,usb_metaC* meta
+alias of:N*T*Cmediatek,mt6363-lvsys-notify pmic_lvsys_notify
+alias of:N*T*Cmediatek,mt6363-lvsys-notifyC* pmic_lvsys_notify
 alias spmi:spmi-pmic mtk_spmi_pmic
 alias of:N*T*Cmediatek,mt6315 mtk_spmi_pmic
 alias of:N*T*Cmediatek,mt6315C* mtk_spmi_pmic
@@ -832,6 +836,8 @@ alias of:N*T*Cmediatek,mt6779-mmc mtk_mmc
 alias of:N*T*Cmediatek,mt6779-mmcC* mtk_mmc
 alias of:N*T*Cmediatek,mt6765-mmc mtk_mmc
 alias of:N*T*Cmediatek,mt6765-mmcC* mtk_mmc
+alias of:N*T*Cmediatek,mt6761-mmc mtk_mmc
+alias of:N*T*Cmediatek,mt6761-mmcC* mtk_mmc
 alias of:N*T*Cmediatek,mt6768-mmc mtk_mmc
 alias of:N*T*Cmediatek,mt6768-mmcC* mtk_mmc
 alias of:N*T*Cmediatek,mt6789-mmc mtk_mmc
