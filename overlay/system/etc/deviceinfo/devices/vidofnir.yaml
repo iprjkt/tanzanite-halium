@@ -13,3 +13,12 @@ vidofnir:
   SingleColorLedSysfsPath: /sys/class/leds/green
   PulseaudioModulesDroid_ExtraCardArgs: "hw_volume=false rate=48000"
   FilesystemEncryption: true
+  CollapsedPanelHeight: 52
+  DisplayCutoutsCollapsed:
+    - 0 0 16 52
+    - 324 0 58 52
+    - 704 0 16 52
+  DisplayCutoutsExpanded:
+    - 0 0 16 98
+    - 324 0 72 98
+    - 704 0 16 98
