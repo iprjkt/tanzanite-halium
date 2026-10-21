@@ -1,6 +1,6 @@
-vidofnir:
-  Vendor: Volla
-  PrettyName: Volla Phone X23
+tanzanite:
+  Vendor: Xiaomi
+  PrettyName: Redmi Note 14 4G
   DeviceType: phone
   GridUnit: 14
   SupportedOrientations:
