@@ -9,6 +9,9 @@ deviceinfo_kernel_defconfig="tanzanite_defconfig"
 deviceinfo_kernel_cmdline="bootopt=64S3,32N2,64N2 systempart=/dev/mapper/system"
 deviceinfo_kernel_clang_compile="true"
 deviceinfo_kernel_llvm_compile="true"
+# EvernightKernel is a pure GKI build with no in-tree vendor modules. Vendor
+# modules are shipped prebuilt (from stock vendor_boot) in vendor-ramdisk-overlay.
+deviceinfo_kernel_disable_modules="true"
 
 deviceinfo_ramdisk_compression="lz4"
 deviceinfo_dtb="mediatek/tanzanite.dtb"
