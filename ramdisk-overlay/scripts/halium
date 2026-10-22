@@ -302,6 +302,9 @@ identify_file_layout() {
 	elif [ -d /tmpmnt/halium-rootfs ]; then
 		imagefile=/tmpmnt/halium-rootfs
 		file_layout="subdir"
+	elif [ -d /tmpmnt/ubuntu ]; then
+		imagefile=/tmpmnt/ubuntu
+		file_layout="subdir"
 	else
 		file_layout="partition"
 	fi
@@ -502,25 +505,27 @@ mountroot() {
 		halium_panic "Couldn't find data partition."
 	fi
 
-	tell_kmsg "checking filesystem integrity for the userdata partition"
-	# Mounting and umounting first, let the kernel handle the journal and
-	# orphaned inodes (faster than e2fsck). Then, just run e2fsck forcing -y.
-	# Also check the amount of time used by to check the filesystem.
-	fsck_start=$(date +%s)
-	mount -o errors=remount-ro $path /tmpmnt
-	umount /tmpmnt
-	e2fsck -y $path >/run/e2fsck.out 2>&1
-	fsck_end=$(date +%s)
-	tell_kmsg "checking filesystem for userdata took (including e2fsck) $((fsck_end - fsck_start)) seconds"
+	userdata_type="$(blkid $path -o value -s TYPE || true)"
+	tell_kmsg "userdata filesystem type detected as: ${userdata_type:-unknown}"
 
-	resize_userdata_if_needed ${path}
-
-	tell_kmsg "mounting $path"
-
-	# Mount the data partition to a temporary mount point
-	# FIXME: data=journal used on ext4 as a workaround for bug 1387214
-	[ `blkid $path -o value -s TYPE` = "ext4" ] && OPTIONS="data=journal,"
-	mount -o discard,$OPTIONS $path /tmpmnt
+	if [ "$userdata_type" = "ext4" ]; then
+		tell_kmsg "checking filesystem integrity for ext4 userdata partition"
+		fsck_start=$(date +%s)
+		mount -o errors=remount-ro $path /tmpmnt
+		umount /tmpmnt
+		e2fsck -y $path >/run/e2fsck.out 2>&1
+		fsck_end=$(date +%s)
+		tell_kmsg "e2fsck took $((fsck_end - fsck_start)) seconds"
+		resize_userdata_if_needed ${path}
+		tell_kmsg "mounting ext4 $path"
+		mount -o discard,data=journal $path /tmpmnt || mount $path /tmpmnt || halium_panic "Failed to mount ext4 userdata. Is it encrypted?"
+	elif [ "$userdata_type" = "f2fs" ]; then
+		tell_kmsg "mounting f2fs $path"
+		mount -o discard $path /tmpmnt || mount $path /tmpmnt || halium_panic "Failed to mount f2fs userdata. Is it encrypted?"
+	else
+		tell_kmsg "trying generic mount for $path"
+		mount -o discard $path /tmpmnt || mount $path /tmpmnt || halium_panic "Failed to mount userdata ($path). Userdata appears encrypted or unformatted."
+	fi
 
 	# setup super partition if exists
 	if [ -n "/dev/disk/by-partlabel/super" ]; then
@@ -582,7 +587,7 @@ mountroot() {
 		mount -o loop,rw $imagefile /halium-system
 	elif [ -d "$imagefile" ]; then
 		# Rootfs is a directory
-		mount -o bind /tmpmnt/halium-rootfs /halium-system
+		mount -o bind "$imagefile" /halium-system
 	fi
 	
 	# Identify image mode: either "rootfs" or "system"
