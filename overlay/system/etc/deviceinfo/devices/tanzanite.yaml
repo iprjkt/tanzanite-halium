@@ -12,7 +12,7 @@ tanzanite:
   VibrateDurationExtraMs: 40
   SingleColorLedSysfsPath: /sys/class/leds/green
   PulseaudioModulesDroid_ExtraCardArgs: "hw_volume=false rate=48000"
-  FilesystemEncryption: true
+  FilesystemEncryption: false
   CollapsedPanelHeight: 52
   DisplayCutoutsCollapsed:
     - 0 0 16 52
