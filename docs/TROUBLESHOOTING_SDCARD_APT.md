@@ -1,4 +1,4 @@
-# Troubleshooting: `/sdcard` di HyperOS & `apt install` di Ubuntu Touch
+# Troubleshooting: `/sdcard` & bootloop HyperOS, `apt install` di Ubuntu Touch
 
 > Device: Xiaomi Redmi Note 14 4G (`tanzanite`, MT6789) — dual-boot HyperOS + Ubuntu Touch 20.04 (Halium 12), `/data` ext4 tanpa enkripsi.
 > Kernel: `5.10.269-ColumbinaKernel` (KernelSU).
@@ -115,6 +115,50 @@ sudo apt install <paket>
 > [!IMPORTANT]
 > Kalau `ubuntu-touch-hybris` di-upgrade dari repo, dependensi lama bisa muncul lagi. Ulangi patch `sed` di atas, atau pakai `apt-mark hold ubuntu-touch-hybris`.
 
+### 3. HyperOS bootloop setelah patch fstab di partisi `vendor` (`boringssl-self-check-failed`)
+
+#### Gejala
+- Setelah flash `tanzanite-fstab-patch*.zip` (versi lama) atau setelah `boot-to-android`, HyperOS bootloop sangat awal (sebelum bootanimation). Restore `boot`/`vendor_boot`/`dtbo` stock lewat fastboot tidak menolong.
+- Di `/sys/fs/pstore/console-ramoops-0` (dibaca dari OrangeFox) muncul alasan reboot:
+  ```
+  reboot,boringssl-self-check-failed
+  ```
+
+#### Akar masalah
+Partisi `vendor` adalah EROFS, jadi zip patch melakukan dump → `extract.erofs` → edit `etc/fstab.mt6789` → `mkfs.erofs` → flash. Label SELinux untuk image baru diambil dari `--file-contexts`. Versi lama `update-binary.template.sh` salah di dua hal:
+1. Hanya memakai `vendor_file_contexts`, tanpa `plat_file_contexts`.
+2. Menambahkan baris catch-all `/vendor(/.*)? u:object_r:vendor_file:s0` di **akhir** file. Di libselinux, kalau beberapa aturan cocok, yang menang adalah aturan yang muncul paling akhir. Akibatnya semua file di vendor diberi label `vendor_file`.
+
+Akibatnya `/vendor/bin/boringssl_self_test32/64` kehilangan label `vendor_boringssl_self_test_exec`. `init` tidak bisa menjalankan self-test BoringSSL dengan domain yang benar di fase `early-init`, lalu device di-reboot dengan alasan `boringssl-self-check-failed`. Label HAL lain juga ikut rusak.
+
+#### Perbaikan
+Gabungkan `plat_file_contexts` **di depan** `vendor_file_contexts`, dan jangan tambahkan catch-all di akhir. Logic ini sekarang ada di [update-binary.template.sh](file:///home/fxxyz73/tanzanite-halium/flashable_zips/update-binary.template.sh#L109-L124):
+```sh
+cat /plat_file_contexts extracted/etc/selinux/vendor_file_contexts > combined_fc
+mkfs.erofs -zlz4hc,level=12 -T 1230768000 \
+    -U 49911ede-c544-3978-11fe-1cb76c7de057 \
+    --mount-point=/vendor --file-contexts=combined_fc \
+    vendor_patched.img extracted/
+```
+(`-U` adalah UUID EROFS dari `vendor_a` stock device ini. Untuk device lain, ambil dari image vendor aslinya.)
+
+Pemulihan device yang sudah terlanjur bootloop (dari OrangeFox):
+1. Pakai backup vendor asli yang dibuat otomatis oleh zip: `/data/media/0/.backup/vendor_orig_a.img`.
+2. Extract, patch fstab, lalu repack dengan `combined_fc` seperti di atas.
+3. `dd` hasilnya ke `/dev/block/mapper/vendor_a`, lalu reboot.
+
+Kalau hanya ingin kembali ke HyperOS stock tanpa fstab ext4, `dd` langsung `vendor_orig_a.img` ke `vendor_a`. Tapi ingat: `/data` yang sudah ext4 tidak akan bisa di-mount oleh fstab f2fs stock.
+
+#### Verifikasi
+Bandingkan label penting antara image hasil repack dan image stock (setelah di-mount atau di-extract):
+```sh
+ls -Z /vendor/bin/boringssl_self_test32 /vendor/bin/boringssl_self_test64
+# harus: u:object_r:vendor_boringssl_self_test_exec:s0
+ls -Z /vendor/bin/hw/ | head
+# harus: label hal_*_default_exec, bukan vendor_file
+```
+Hasil yang sudah dicek: semua label di `vendor_a` hasil repack sama dengan `vendor_orig_a.img` stock, dan HyperOS boot normal di `/data` ext4.
+
 ---
 
 ## English
@@ -223,3 +267,47 @@ sudo apt install <package>
 
 > [!IMPORTANT]
 > If `ubuntu-touch-hybris` gets upgraded from the repo, the old dependencies may come back. Re-apply the `sed` patch above, or run `apt-mark hold ubuntu-touch-hybris`.
+
+### 3. HyperOS bootloop after patching fstab in the `vendor` partition (`boringssl-self-check-failed`)
+
+#### Symptoms
+- After flashing an older `tanzanite-fstab-patch*.zip`, or after running `boot-to-android`, HyperOS bootloops very early (before the boot animation). Restoring stock `boot`/`vendor_boot`/`dtbo` via fastboot doesn't help.
+- `/sys/fs/pstore/console-ramoops-0` (read from OrangeFox) shows the reboot reason:
+  ```
+  reboot,boringssl-self-check-failed
+  ```
+
+#### Root cause
+The `vendor` partition is EROFS, so the patch zip does dump → `extract.erofs` → edit `etc/fstab.mt6789` → `mkfs.erofs` → flash. SELinux labels for the new image come from `--file-contexts`. The old `update-binary.template.sh` got this wrong in two ways:
+1. It used only `vendor_file_contexts`, without `plat_file_contexts`.
+2. It appended a catch-all `/vendor(/.*)? u:object_r:vendor_file:s0` at the **end** of the file. In libselinux, when several rules match, the one that appears last wins. So every file in vendor was labeled `vendor_file`.
+
+As a result, `/vendor/bin/boringssl_self_test32/64` lost its `vendor_boringssl_self_test_exec` label. `init` couldn't run the BoringSSL self-test in the right domain during `early-init`, so the device rebooted with `boringssl-self-check-failed`. Other HAL labels were broken too.
+
+#### Fix
+Put `plat_file_contexts` **before** `vendor_file_contexts`, and don't append a catch-all at the end. This logic now lives in [update-binary.template.sh](file:///home/fxxyz73/tanzanite-halium/flashable_zips/update-binary.template.sh#L109-L124):
+```sh
+cat /plat_file_contexts extracted/etc/selinux/vendor_file_contexts > combined_fc
+mkfs.erofs -zlz4hc,level=12 -T 1230768000 \
+    -U 49911ede-c544-3978-11fe-1cb76c7de057 \
+    --mount-point=/vendor --file-contexts=combined_fc \
+    vendor_patched.img extracted/
+```
+(`-U` is the EROFS UUID of this device's stock `vendor_a`. For other devices, take it from their original vendor image.)
+
+Recovering a device that is already bootlooping (from OrangeFox):
+1. Use the original vendor backup the zip creates automatically: `/data/media/0/.backup/vendor_orig_a.img`.
+2. Extract it, patch the fstab, then repack with `combined_fc` as shown above.
+3. `dd` the result to `/dev/block/mapper/vendor_a` and reboot.
+
+If you just want to go back to stock HyperOS without the ext4 fstab, `dd` `vendor_orig_a.img` straight to `vendor_a`. Keep in mind that an ext4 `/data` won't mount with the stock f2fs fstab.
+
+#### Verification
+Compare key labels between the repacked image and the stock image (after mounting or extracting them):
+```sh
+ls -Z /vendor/bin/boringssl_self_test32 /vendor/bin/boringssl_self_test64
+# expected: u:object_r:vendor_boringssl_self_test_exec:s0
+ls -Z /vendor/bin/hw/ | head
+# expected: hal_*_default_exec labels, not vendor_file
+```
+Checked results: every label in the repacked `vendor_a` matches the stock `vendor_orig_a.img`, and HyperOS boots normally on ext4 `/data`.
