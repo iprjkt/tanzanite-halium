@@ -759,7 +759,7 @@ fun AboutContent(
         // Community & Source Code Links
         item {
             Spacer(modifier = Modifier.height(6.dp))
-            SmallTitle(text = "COMMUNITY & SOURCE")
+            SmallTitle(text = "COMMUNITY & SUPPORT")
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -773,15 +773,39 @@ fun AboutContent(
                 )
                 SuperArrow(
                     title = "Telegram Channel",
-                    summary = "Ubuntu Touch Tanzanite community discussion",
+                    summary = "Ubuntu Touch Tanzanite updates & news",
                     rightText = "@anotherside551",
                     onClick = { openUrl("https://t.me/anotherside551") }
+                )
+                SuperArrow(
+                    title = "Telegram Support Group",
+                    summary = "Community discussion & troubleshooting group",
+                    rightText = "@idiscuss1",
+                    onClick = { openUrl("https://t.me/idiscuss1") }
                 )
                 SuperArrow(
                     title = "UBports Documentation",
                     summary = "Official Halium & Ubuntu Touch guides",
                     rightText = "ubports.com",
                     onClick = { openUrl("https://docs.ubports.com") }
+                )
+            }
+        }
+
+        // Donation & Sponsor matching HyperCeiler
+        item {
+            Spacer(modifier = Modifier.height(6.dp))
+            SmallTitle(text = "DONATION & SPONSOR")
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                SuperArrow(
+                    title = "Donate / Sponsor",
+                    summary = "Support Tanzanite port maintenance via Sociabuzz",
+                    rightText = "Sociabuzz",
+                    onClick = { openUrl("https://sociabuzz.com/fxxyz73/tribe") }
                 )
             }
         }
