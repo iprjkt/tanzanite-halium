@@ -706,6 +706,7 @@ mountroot() {
 
 		# Create a fake android data, shared by rootfs and LXC container
 		mkdir -p ${rootmnt}/userdata/android-data
+		touch ${rootmnt}/userdata/.force-adb 2>/dev/null || true
 		mount -o bind ${rootmnt}/userdata/android-data ${rootmnt}/android/data
 		[ ! -h ${rootmnt}/data ] && ln -sf /android/data ${rootmnt}/data
 
