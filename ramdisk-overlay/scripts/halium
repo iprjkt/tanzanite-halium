@@ -273,12 +273,14 @@ resize_userdata_if_needed() {
 	# Partition size in 1k blocks
 	pblocks=$(grep ${path##*/} /proc/partitions | awk {'print $3'})
 	# Filesystem size in 4k blocks
-	fsblocks=$(dumpe2fs -h $path | grep "Block count" | awk {'print $3'})
-	# Difference between the reported sizes in 1k blocks
-	dblocks=$((pblocks - 4 * fsblocks))
-	if [ $dblocks -gt 10000 ]; then
-		resize2fs -f $path
-		tell_kmsg "resized userdata filesystem to fill $path"
+	fsblocks=$(dumpe2fs -h $path 2>/dev/null | grep "Block count" | awk {'print $3'})
+	if [ -n "$pblocks" ] && [ -n "$fsblocks" ]; then
+		# Difference between the reported sizes in 1k blocks
+		dblocks=$((pblocks - 4 * fsblocks))
+		if [ $dblocks -gt 10000 ]; then
+			resize2fs -f $path
+			tell_kmsg "resized userdata filesystem to fill $path"
+		fi
 	fi
 }
 
@@ -327,7 +329,11 @@ process_bind_mounts() {
 	FSTAB=${rootmnt}/etc/fstab
 	touch ${rootmnt}/run/image.fstab
 	mount -o bind ${rootmnt}/run/image.fstab $FSTAB ||halium_panic "Could not bind-mount fstab"
-	echo "/dev/root / rootfs defaults,ro 0 0" >>$FSTAB
+	if [ "$file_layout" = "subdir" ] || [ -e ${rootmnt}/userdata/.writable_image ] || [ -e ${rootmnt}/.writable_image ]; then
+		echo "/dev/root / rootfs defaults,rw 0 0" >>$FSTAB
+	else
+		echo "/dev/root / rootfs defaults,ro 0 0" >>$FSTAB
+	fi
 
 	tell_kmsg "Adding bind-mounts to $FSTAB"
 	# Process the list of bind-mounts
@@ -518,7 +524,7 @@ mountroot() {
 		tell_kmsg "e2fsck took $((fsck_end - fsck_start)) seconds"
 		resize_userdata_if_needed ${path}
 		tell_kmsg "mounting ext4 $path"
-		mount -o discard,data=journal $path /tmpmnt || mount $path /tmpmnt || halium_panic "Failed to mount ext4 userdata. Is it encrypted?"
+		mount -o discard $path /tmpmnt || mount $path /tmpmnt || halium_panic "Failed to mount ext4 userdata. Is it encrypted?"
 	elif [ "$userdata_type" = "f2fs" ]; then
 		tell_kmsg "mounting f2fs $path"
 		mount -o discard $path /tmpmnt || mount $path /tmpmnt || halium_panic "Failed to mount f2fs userdata. Is it encrypted?"
@@ -605,7 +611,7 @@ mountroot() {
 
 	# If either (android) /data/.writable_image or (on rootfs)
 	# /.writable_image exist, mount the rootfs as rw
-	if [ -e /tmpmnt/.writable_image ] || [ -e /halium-system/.writable_image ]; then
+	if [ "$file_layout" = "subdir" ] || [ -e /tmpmnt/.writable_image ] || [ -e /halium-system/.writable_image ]; then
 		tell_kmsg "mounting $_syspart $imagefile (image developer mode)"
 		mountroot_status="$?"
 	else
