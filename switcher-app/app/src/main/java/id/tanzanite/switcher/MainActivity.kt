@@ -47,6 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationItem
@@ -627,7 +628,7 @@ fun AboutContent(
             .padding(innerPadding),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
-        // Top Header matching HyperCeiler layout with Ubuntu Logo
+        // Top Header matching HyperCeiler layout with App Icon
         item {
             Column(
                 modifier = Modifier
@@ -643,8 +644,8 @@ fun AboutContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.ic_ubuntu_logo),
-                        contentDescription = "Ubuntu Logo",
+                        painter = painterResource(R.drawable.icon_app),
+                        contentDescription = "App Icon",
                         modifier = Modifier.size(92.dp)
                     )
                 }
@@ -740,12 +741,11 @@ fun AboutContent(
             ) {
                 SuperArrow(
                     leftAction = {
-                        Image(
-                            painter = painterResource(R.drawable.ic_ubuntu_logo),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
+                        Icon(
+                            painter = painterResource(R.drawable.ic_github),
+                            contentDescription = "GitHub",
+                            modifier = Modifier.size(28.dp),
+                            tint = MiuixTheme.colorScheme.onSurface
                         )
                     },
                     title = "iprjkt | Tanzanite",
@@ -754,6 +754,14 @@ fun AboutContent(
                     onClick = { openUrl("https://github.com/iprjkt") }
                 )
                 SuperArrow(
+                    leftAction = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_telegram),
+                            contentDescription = "Telegram",
+                            modifier = Modifier.size(28.dp),
+                            tint = Color(0xFF2AABEE)
+                        )
+                    },
                     title = "Telegram",
                     summary = "Personal contact & developer account",
                     rightText = "@anotherside551",
@@ -772,12 +780,29 @@ fun AboutContent(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 SuperArrow(
+                    leftAction = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_telegram),
+                            contentDescription = "Telegram Support Group",
+                            modifier = Modifier.size(28.dp),
+                            tint = Color(0xFF2AABEE)
+                        )
+                    },
                     title = "Telegram Support Group",
                     summary = "Community discussion & troubleshooting group",
                     rightText = "@idiscuss1",
                     onClick = { openUrl("https://t.me/idiscuss1") }
                 )
                 SuperArrow(
+                    leftAction = {
+                        Image(
+                            painter = painterResource(R.drawable.icon_app),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                        )
+                    },
                     title = "UBports Documentation",
                     summary = "Official Halium & Ubuntu Touch guides",
                     rightText = "ubports.com",
