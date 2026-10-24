@@ -3,3 +3,12 @@
 /build
 /ota
 /partitions
+/stock_backup/
+/vendor_patch/
+/dfe_ref/
+/ak3_ref/
+/flashable_tools/
+/vbmeta_disabled/
+ubuntu-rootfs-backup.tar
+tanzanite-halium.zip
+*.apk
