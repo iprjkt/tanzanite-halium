@@ -753,10 +753,16 @@ fun AboutContent(
                     rightText = "@iprjkt",
                     onClick = { openUrl("https://github.com/iprjkt") }
                 )
+                SuperArrow(
+                    title = "Telegram",
+                    summary = "Personal contact & developer account",
+                    rightText = "@anotherside551",
+                    onClick = { openUrl("https://t.me/anotherside551") }
+                )
             }
         }
 
-        // Community & Source Code Links
+        // Community & Support Links
         item {
             Spacer(modifier = Modifier.height(6.dp))
             SmallTitle(text = "COMMUNITY & SUPPORT")
@@ -765,18 +771,6 @@ fun AboutContent(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
-                SuperArrow(
-                    title = "GitHub Repository",
-                    summary = "Source code, flashable zips, and issues",
-                    rightText = "iprjkt",
-                    onClick = { openUrl("https://github.com/iprjkt") }
-                )
-                SuperArrow(
-                    title = "Telegram Channel",
-                    summary = "Ubuntu Touch Tanzanite updates & news",
-                    rightText = "@anotherside551",
-                    onClick = { openUrl("https://t.me/anotherside551") }
-                )
                 SuperArrow(
                     title = "Telegram Support Group",
                     summary = "Community discussion & troubleshooting group",
