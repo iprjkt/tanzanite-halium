@@ -61,6 +61,7 @@ import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.useful.Info
+import top.yukonga.miuix.kmp.icon.icons.useful.Like
 import top.yukonga.miuix.kmp.icon.icons.useful.NavigatorSwitch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
@@ -741,12 +742,19 @@ fun AboutContent(
             ) {
                 SuperArrow(
                     leftAction = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_github),
-                            contentDescription = "GitHub",
-                            modifier = Modifier.size(28.dp),
-                            tint = MiuixTheme.colorScheme.onSurface
-                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .size(26.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_github),
+                                contentDescription = "GitHub",
+                                modifier = Modifier.size(22.dp),
+                                tint = MiuixTheme.colorScheme.onSurface
+                            )
+                        }
                     },
                     title = "iprjkt | Tanzanite",
                     summary = "Port maintainer & kernel developer",
@@ -755,12 +763,19 @@ fun AboutContent(
                 )
                 SuperArrow(
                     leftAction = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_telegram),
-                            contentDescription = "Telegram",
-                            modifier = Modifier.size(28.dp),
-                            tint = Color(0xFF2AABEE)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .size(26.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_telegram),
+                                contentDescription = "Telegram",
+                                modifier = Modifier.size(22.dp),
+                                tint = Color(0xFF2AABEE)
+                            )
+                        }
                     },
                     title = "Telegram",
                     summary = "Personal contact & developer account",
@@ -781,12 +796,19 @@ fun AboutContent(
             ) {
                 SuperArrow(
                     leftAction = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_telegram),
-                            contentDescription = "Telegram Support Group",
-                            modifier = Modifier.size(28.dp),
-                            tint = Color(0xFF2AABEE)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .size(26.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_telegram),
+                                contentDescription = "Telegram Support Group",
+                                modifier = Modifier.size(22.dp),
+                                tint = Color(0xFF2AABEE)
+                            )
+                        }
                     },
                     title = "Telegram Support Group",
                     summary = "Community discussion & troubleshooting group",
@@ -795,13 +817,20 @@ fun AboutContent(
                 )
                 SuperArrow(
                     leftAction = {
-                        Image(
-                            painter = painterResource(R.drawable.icon_app),
-                            contentDescription = null,
+                        Box(
                             modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                        )
+                                .padding(end = 16.dp)
+                                .size(26.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.icon_app),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clip(CircleShape)
+                            )
+                        }
                     },
                     title = "UBports Documentation",
                     summary = "Official Halium & Ubuntu Touch guides",
@@ -821,6 +850,21 @@ fun AboutContent(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 SuperArrow(
+                    leftAction = {
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .size(26.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Useful.Like,
+                                contentDescription = "Donate",
+                                modifier = Modifier.size(22.dp),
+                                tint = Color(0xFFE95420)
+                            )
+                        }
+                    },
                     title = "Donate / Sponsor",
                     summary = "Support Tanzanite port maintenance via Sociabuzz",
                     rightText = "Sociabuzz",
