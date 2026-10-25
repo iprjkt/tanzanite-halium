@@ -1,6 +1,6 @@
 # Troubleshooting: `/sdcard` & bootloop HyperOS, `apt install` di Ubuntu Touch
 
-> Device: Xiaomi Redmi Note 14 4G (`tanzanite`, MT6789) — dual-boot HyperOS + Ubuntu Touch 20.04 (Halium 12), `/data` ext4 tanpa enkripsi.
+> Device: Xiaomi Redmi Note 14 4G (`tanzanite`, MT6789), dual-boot HyperOS + Ubuntu Touch 20.04 (Halium 12), `/data` ext4 tanpa enkripsi.
 > Kernel: `5.10.269-ColumbinaKernel` (KernelSU).
 
 - [Bahasa Indonesia](#bahasa-indonesia)
@@ -25,7 +25,7 @@
 
 #### Akar masalah
 1. **FUSE-BPF aktif.** Secara default HyperOS menyetel `ro.fuse.bpf.is_running=true`, sehingga `vold` dan `MediaProvider` (`libfuse_jni.so`) memasang FUSE-BPF dengan *backing inode* ke `/data/media` (internal) dan `/mnt/media_rw/<UUID>` (SD card).
-   Di implementasi FUSE-BPF kernel ini, cek izin dilakukan langsung pada inode bawah dengan kredensial pemanggil — lihat `inode_permission(backing_inode, mask)` di `fuse_open_backing()` dan `fuse_access_backing()` (`fs/fuse/backing.c`). Karena `/data/media/0` bermode `2770 media_rw:media_rw`, proses yang tidak ada di grup `media_rw` (ADB `shell`, aplikasi biasa) ditolak, dan `MediaProvider` tidak pernah sempat memberi keputusan.
+   Di implementasi FUSE-BPF kernel ini, cek izin dilakukan langsung pada inode bawah dengan kredensial pemanggil (lihat `inode_permission(backing_inode, mask)` di `fuse_open_backing()` dan `fuse_access_backing()` di `fs/fuse/backing.c`). Karena `/data/media/0` bermode `2770 media_rw:media_rw`, proses yang tidak ada di grup `media_rw` (ADB `shell`, aplikasi biasa) ditolak, dan `MediaProvider` tidak pernah sempat memberi keputusan.
 2. **Owner/grup salah di `/data/media/0/*`.** Folder `/data/media/0/.backup` dibuat dari OrangeFox (sebagai `root:root`) **sebelum** HyperOS boot pertama di `/data` ext4 yang baru diformat. Akibatnya folder standar (`Download`, `DCIM`, `Pictures`, `MIUI`, …) dibuat oleh `MediaProvider` sebagai `u0_a219:u0_a219` mode `0770`, tanpa grup `media_rw` dan tanpa bit setgid.
 
 #### Perbaikan
@@ -178,7 +178,7 @@ Hasil yang sudah dicek: semua label di `vendor_a` hasil repack sama dengan `vend
 
 #### Root cause
 1. **FUSE-BPF is active.** HyperOS sets `ro.fuse.bpf.is_running=true` by default, so `vold` and `MediaProvider` (`libfuse_jni.so`) mount FUSE with FUSE-BPF *backing inodes* pointing at `/data/media` (internal) and `/mnt/media_rw/<UUID>` (SD card).
-   In this kernel's FUSE-BPF implementation, permission checks run directly against the lower inode using the caller's credentials — see `inode_permission(backing_inode, mask)` in `fuse_open_backing()` and `fuse_access_backing()` (`fs/fuse/backing.c`). Because `/data/media/0` is `2770 media_rw:media_rw`, any process outside the `media_rw` group (ADB `shell`, regular apps) is rejected, and `MediaProvider` never gets to decide.
+   In this kernel's FUSE-BPF implementation, permission checks run directly against the lower inode using the caller's credentials (see `inode_permission(backing_inode, mask)` in `fuse_open_backing()` and `fuse_access_backing()` in `fs/fuse/backing.c`). Because `/data/media/0` is `2770 media_rw:media_rw`, any process outside the `media_rw` group (ADB `shell`, regular apps) is rejected, and `MediaProvider` never gets to decide.
 2. **Wrong owner/group on `/data/media/0/*`.** `/data/media/0/.backup` was created from OrangeFox (as `root:root`) **before** HyperOS first booted on the freshly formatted ext4 `/data`. As a result, `MediaProvider` created the standard folders (`Download`, `DCIM`, `Pictures`, `MIUI`, …) as `u0_a219:u0_a219` mode `0770`, without the `media_rw` group or the setgid bit.
 
 #### Fix
