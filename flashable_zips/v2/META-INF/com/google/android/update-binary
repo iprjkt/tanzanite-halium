@@ -262,7 +262,51 @@ else
     NEW_SIZE=$("$BB" stat -c '%s' "$WORK/vendor_patched.img")
     ui_print "[*] Repacked EROFS size: $NEW_SIZE bytes (limit: $ORIG_SIZE bytes)"
     if [ "$NEW_SIZE" -gt "$ORIG_SIZE" ]; then
-      abort "Repacked vendor image ($NEW_SIZE) exceeds partition size ($ORIG_SIZE)!"
+      ui_print "[!] Repacked image ($NEW_SIZE bytes) exceeds partition size ($ORIG_SIZE bytes)."
+      RESIZED=false
+      if [ -e "/dev/block/by-name/super" ] && [ -x "$WORK/tools/lptools" ]; then
+        ui_print "[*] Expanding dynamic partition vendor${SLOT} via lptools..."
+
+        # Align target size to 1MB + 2MB headroom
+        TARGET_SIZE=$(( ((NEW_SIZE + 1048575) / 1048576) * 1048576 + 2097152 ))
+        ui_print "[*] Target partition size: $TARGET_SIZE bytes"
+
+        # Unmount and unmap vendor before resizing
+        umount -fl "$VENDOR_PART" 2>/dev/null || true
+        umount -fl /vendor 2>/dev/null || true
+        "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --unmap "vendor${SLOT}" 2>/dev/null || true
+        "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --unmap "vendor${SLOT}" 2>/dev/null || true
+
+        # Resize partition in super metadata
+        if "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --resize "vendor${SLOT}" "$TARGET_SIZE" 2>&1; then
+          RESIZED=true
+        elif "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --unlimited-group --resize "vendor${SLOT}" "$TARGET_SIZE" 2>&1; then
+          RESIZED=true
+        elif "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --resize "vendor${SLOT}" "$TARGET_SIZE" 2>&1; then
+          RESIZED=true
+        elif "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --resize "vendor" "$TARGET_SIZE" 2>&1; then
+          RESIZED=true
+        fi
+
+        # Remap partition to update device-mapper table in kernel
+        "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --map "vendor${SLOT}" || true
+
+        if [ -e "/dev/block/mapper/vendor${SLOT}" ]; then
+          VENDOR_PART="/dev/block/mapper/vendor${SLOT}"
+        fi
+
+        blockdev --setrw "$VENDOR_PART" 2>/dev/null || true
+        ORIG_SIZE=$(blockdev --getsize64 "$VENDOR_PART" 2>/dev/null || echo 0)
+        ui_print "[*] New vendor${SLOT} partition size: $ORIG_SIZE bytes"
+
+        if [ "$NEW_SIZE" -le "$ORIG_SIZE" ]; then
+          ui_print "[+] Successfully resized vendor${SLOT} dynamic partition!"
+        else
+          abort "Failed to resize vendor partition (size $ORIG_SIZE is still smaller than $NEW_SIZE)!"
+        fi
+      else
+        abort "Repacked vendor image ($NEW_SIZE) exceeds partition size ($ORIG_SIZE) and lptools is unavailable!"
+      fi
     fi
 
     # Free space in /tmp before flashing

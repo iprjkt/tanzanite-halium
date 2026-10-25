@@ -11,4 +11,5 @@
 /vbmeta_disabled/
 ubuntu-rootfs-backup.tar
 tanzanite-halium.zip
+*.zip
 *.apk
