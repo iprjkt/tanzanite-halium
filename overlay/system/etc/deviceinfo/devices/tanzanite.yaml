@@ -10,6 +10,7 @@ tanzanite:
   OfonoPlugin: binder
   OfonoImplementsIms: true
   VibrateDurationExtraMs: 40
+  FlashlightSysfsPath: /run/flashlight_bridge
   SingleColorLedSysfsPath: /sys/class/leds/green
   PulseaudioModulesDroid_ExtraCardArgs: "hw_volume=false rate=48000"
   FilesystemEncryption: false

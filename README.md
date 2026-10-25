@@ -39,6 +39,23 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 
 ---
 
+## 📊 Hardware Working Status
+
+| Hardware / Feature | Status | Notes |
+| :--- | :--- | :--- |
+| **Display / Touchscreen** | 🟢 Working | Full resolution, multi-touch responsive |
+| **Lomiri UI / Compositor** | 🟢 Working | Native Wayland via `lomiri-system-compositor` |
+| **GPU Acceleration** | 🟢 Working | Mali-G57 MC2 via libhybris / Android 12 Gralloc & EGL |
+| **Audio (Speaker / Playback)** | 🟢 Working | PulseAudio with Droid HAL 30 & clean Aurisys routing |
+| **Audio (Microphone / Input)** | 🟢 Working | Primary mic routed through Droid source |
+| **Flashlight / Torch** | 🟢 Working | Controlled via Ayatana Power Indicator & sysfs bridge daemon |
+| **Screen Rotation / Sensors** | 🟢 Working | Accelerometer & Orientation via HIDL 2.0 sensorfw |
+| **Cellular / 4G LTE Data** | 🟢 Working | Dual SIM slots detected via ofono-sailfish & MTK IRadio@1.2 |
+| **WiFi & Bluetooth** | 🟢 Working | Managed by ConnMan & Bluez / Bluebinder |
+| **Camera** | 🟡 In Progress | Halium 12 camera metadata service binding in progress |
+
+---
+
 ## ✨ Features & Components
 
 1. **Dual-Boot Architecture**:
