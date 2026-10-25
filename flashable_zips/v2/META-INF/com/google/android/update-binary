@@ -20,13 +20,17 @@ abort() {
 }
 
 ui_print "=============================================="
-ui_print "              .---.                           "
-ui_print "            -(  o  )-                         "
-ui_print "          /     '     \\                      "
-ui_print "      (o)|             |(o)                   "
-ui_print "          \\           /                      "
-ui_print "            -(  o  )-                         "
-ui_print "              '---'                           "
+ui_print "                          .-.                 "
+ui_print "                    .-'\`\`(|||)                "
+ui_print "                 ,\`\\ \\    \`-\`.                "
+ui_print "                /   \\ '\`\`-.   \`               "
+ui_print "              .-.  ,       \`___:              "
+ui_print "             (:::) :        ___               "
+ui_print "              \`-\`  \`       ,   :              "
+ui_print "                \\   / ,..-\`   ,               "
+ui_print "                 \`./ /    .-.\`                "
+ui_print "                    \`-..-(   )                "
+ui_print "                          \`-\`                 "
 ui_print "  _   _ _                 _                   "
 ui_print " | | | | |__  _   _ _ __ | |_ _   _           "
 ui_print " | | | | '_ \\| | | | '_ \\| __| | | |          "
@@ -89,76 +93,192 @@ ORIG_SIZE=$(blockdev --getsize64 "$VENDOR_PART")
 ui_print "[*] Found vendor partition: $VENDOR_PART ($ORIG_SIZE bytes)"
 [ "$ORIG_SIZE" -gt 0 ] || abort "Vendor partition size is 0!"
 
-# 3. Dump Vendor Partition
-ui_print "[*] Dumping vendor${SLOT} to $WORK/vendor_orig.img..."
-dd if="$VENDOR_PART" of="$WORK/vendor_orig.img" bs=4M
-[ -s "$WORK/vendor_orig.img" ] || abort "Failed to dump vendor${SLOT}!"
-
-# Backup original vendor & boot partitions if /sdcard is accessible
-if [ -d "/sdcard" ] && mountpoint -q /sdcard 2>/dev/null || [ -d "/data/media/0" ]; then
-  SDCARD_DIR="/sdcard"
-  [ -d "/data/media/0" ] && ! mountpoint -q /sdcard 2>/dev/null && SDCARD_DIR="/data/media/0"
-  mkdir -p "$SDCARD_DIR/.backup"
-  if [ ! -s "$SDCARD_DIR/.backup/vendor_orig${SLOT}.img" ]; then
-    ui_print "[*] Saving vendor backup to $SDCARD_DIR/.backup/vendor_orig${SLOT}.img..."
-    cp -f "$WORK/vendor_orig.img" "$SDCARD_DIR/.backup/vendor_orig${SLOT}.img" || true
+# 3. Detect Vendor Filesystem (EROFS vs EXT4)
+VENDOR_FS=""
+if [ -x "$BB" ]; then
+  VENDOR_FS=$("$BB" blkid "$VENDOR_PART" 2>/dev/null | "$BB" grep -o 'TYPE="[^"]*"' | cut -d'"' -f2 || true)
+fi
+if [ -z "$VENDOR_FS" ]; then
+  VENDOR_FS=$(blkid "$VENDOR_PART" 2>/dev/null | grep -o 'TYPE="[^"]*"' | cut -d'"' -f2 || true)
+fi
+if [ -z "$VENDOR_FS" ]; then
+  EROFS_MAGIC=$(dd if="$VENDOR_PART" skip=1024 bs=1 count=4 2>/dev/null | "$BB" od -An -tx1 | tr -d ' \n' || true)
+  EXT4_MAGIC=$(dd if="$VENDOR_PART" skip=1080 bs=1 count=2 2>/dev/null | "$BB" od -An -tx1 | tr -d ' \n' || true)
+  if [ "$EROFS_MAGIC" = "e2f5654c" ]; then
+    VENDOR_FS="erofs"
+  elif [ "$EXT4_MAGIC" = "53ef" ]; then
+    VENDOR_FS="ext4"
   fi
 fi
+ui_print "[*] Detected vendor filesystem: ${VENDOR_FS:-unknown}"
 
-# 4. Extract EROFS
-ui_print "[*] Extracting vendor EROFS image..."
-"$WORK/tools/extract.erofs" -i "$WORK/vendor_orig.img" -x "$WORK/extracted"
-FSTAB="$WORK/extracted/etc/fstab.mt6789"
-[ -f "$FSTAB" ] || abort "fstab.mt6789 not found in extracted vendor!"
+if [ "$VENDOR_FS" = "ext4" ]; then
+  ui_print "[*] Processing ext4 vendor partition..."
+  MNT_VENDOR="$WORK/mnt_vendor"
+  mkdir -p "$MNT_VENDOR"
+  blockdev --setrw "$VENDOR_PART" 2>/dev/null || true
+  e2fsck -fy "$VENDOR_PART" >/dev/null 2>&1 || true
 
-# 5. Patch fstab.mt6789
-ui_print "[*] Patching /vendor/etc/fstab.mt6789 (/data -> unencrypted ext4)..."
-"$BB" sed -i 's|^/dev/block/by-name/userdata[[:space:]].*|/dev/block/by-name/userdata /data ext4 noatime,nosuid,nodev,discard,resgid=1065 wait,check,formattable,quota,latemount,resize,reservedsize=128m|' "$FSTAB"
+  if mount -t ext4 -o rw "$VENDOR_PART" "$MNT_VENDOR" 2>/dev/null || mount -o rw "$VENDOR_PART" "$MNT_VENDOR" 2>/dev/null; then
+    # Backup original vendor partition if /sdcard is accessible
+    if [ -d "/sdcard" ] && mountpoint -q /sdcard 2>/dev/null || [ -d "/data/media/0" ]; then
+      SDCARD_DIR="/sdcard"
+      [ -d "/data/media/0" ] && ! mountpoint -q /sdcard 2>/dev/null && SDCARD_DIR="/data/media/0"
+      mkdir -p "$SDCARD_DIR/.backup"
+      if [ ! -s "$SDCARD_DIR/.backup/vendor_orig${SLOT}.img" ]; then
+        ui_print "[*] Saving vendor backup to $SDCARD_DIR/.backup/vendor_orig${SLOT}.img..."
+        dd if="$VENDOR_PART" of="$SDCARD_DIR/.backup/vendor_orig${SLOT}.img" bs=4M || true
+      fi
+    fi
 
-if ! "$BB" grep -q "^/dev/block/by-name/userdata /data ext4 " "$FSTAB"; then
-  abort "fstab.mt6789 patch verification failed!"
-fi
-ui_print "[+] Verified patched line:"
-ui_print "    $("$BB" grep '^/dev/block/by-name/userdata /data ' "$FSTAB")"
+    # Check if fstab is already configured for unencrypted ext4 userdata
+    ALREADY_PATCHED=true
+    FOUND_DATA_ENTRY=false
+    for F in "$MNT_VENDOR/etc/"fstab*; do
+      [ -f "$F" ] || continue
+      if "$BB" grep -E '^[[:space:]]*[^#[:space:]]+[[:space:]]+/data[[:space:]]+' "$F" >/dev/null 2>&1; then
+        FOUND_DATA_ENTRY=true
+        DATA_LINE=$("$BB" grep -E '^[[:space:]]*[^#[:space:]]+[[:space:]]+/data[[:space:]]+' "$F" | head -n 1)
+        FS_ENTRY=$(echo "$DATA_LINE" | awk '{print $3}')
+        if [ "$FS_ENTRY" != "ext4" ]; then
+          ALREADY_PATCHED=false
+          break
+        fi
+        if echo "$DATA_LINE" | "$BB" grep -qiE 'fileencryption=|forceencrypt=|encryptable=|keydirectory='; then
+          ALREADY_PATCHED=false
+          break
+        fi
+      fi
+    done
 
-# 6. Repack EROFS
-ui_print "[*] Repacking EROFS image with mkfs.erofs (-zlz4hc,level=12)..."
-FC_FILE="$WORK/extracted/etc/selinux/vendor_file_contexts"
-COMBINED_FC="$WORK/combined_file_contexts"
-if [ -f "$FC_FILE" ]; then
-  if [ -f "/plat_file_contexts" ]; then
-    cat "/plat_file_contexts" "$FC_FILE" > "$COMBINED_FC"
-  elif [ -f "/system/etc/selinux/plat_file_contexts" ]; then
-    cat "/system/etc/selinux/plat_file_contexts" "$FC_FILE" > "$COMBINED_FC"
+    if [ "$FOUND_DATA_ENTRY" = "true" ] && [ "$ALREADY_PATCHED" = "true" ]; then
+      ui_print "[+] Vendor fstab is ALREADY configured for unencrypted ext4 userdata!"
+      ui_print "    $DATA_LINE"
+      ui_print "[*] Skipping vendor patch."
+      umount "$MNT_VENDOR" 2>/dev/null || true
+      rmdir "$MNT_VENDOR" 2>/dev/null || true
+    else
+      ui_print "[*] Patching fstab in ext4 vendor..."
+      PATCHED_ANY=false
+      for F in "$MNT_VENDOR/etc/"fstab*; do
+        [ -f "$F" ] || continue
+        if "$BB" grep -E '^[[:space:]]*[^#[:space:]]+[[:space:]]+/data[[:space:]]+' "$F" >/dev/null 2>&1; then
+          ui_print "    [*] Patching $(basename "$F") (/data -> unencrypted ext4)..."
+          "$BB" sed -i 's|^/dev/block/by-name/userdata[[:space:]].*|/dev/block/by-name/userdata /data ext4 noatime,nosuid,nodev,discard,resgid=1065 wait,check,formattable,quota,latemount,resize,reservedsize=128m|' "$F"
+          PATCHED_ANY=true
+        fi
+      done
+      [ "$PATCHED_ANY" = "true" ] || abort "No active /data fstab entry found to patch in ext4 vendor!"
+      sync
+      umount "$MNT_VENDOR" 2>/dev/null || true
+      rmdir "$MNT_VENDOR" 2>/dev/null || true
+      ui_print "[+] Successfully patched ext4 vendor in-place!"
+    fi
   else
-    echo '/(vendor|system/vendor)(/.*)? u:object_r:vendor_file:s0' > "$COMBINED_FC"
-    echo '/(vendor|system/vendor)/bin/boringssl_self_test(32|64) u:object_r:vendor_boringssl_self_test_exec:s0' >> "$COMBINED_FC"
-    cat "$FC_FILE" >> "$COMBINED_FC"
+    abort "Failed to mount ext4 vendor partition read-write!"
   fi
-  "$WORK/tools/mkfs.erofs" -zlz4hc,level=12 -T 1230768000 -U 49911ede-c544-3978-11fe-1cb76c7de057 --mount-point=/vendor --file-contexts="$COMBINED_FC" "$WORK/vendor_patched.img" "$WORK/extracted" >/dev/null
 else
-  "$WORK/tools/mkfs.erofs" -zlz4hc,level=12 -T 1230768000 -U 49911ede-c544-3978-11fe-1cb76c7de057 --mount-point=/vendor "$WORK/vendor_patched.img" "$WORK/extracted" >/dev/null
+  # EROFS vendor handling
+  # 3. Dump Vendor Partition
+  ui_print "[*] Dumping vendor${SLOT} to $WORK/vendor_orig.img..."
+  dd if="$VENDOR_PART" of="$WORK/vendor_orig.img" bs=4M
+  [ -s "$WORK/vendor_orig.img" ] || abort "Failed to dump vendor${SLOT}!"
+
+  # Backup original vendor & boot partitions if /sdcard is accessible
+  if [ -d "/sdcard" ] && mountpoint -q /sdcard 2>/dev/null || [ -d "/data/media/0" ]; then
+    SDCARD_DIR="/sdcard"
+    [ -d "/data/media/0" ] && ! mountpoint -q /sdcard 2>/dev/null && SDCARD_DIR="/data/media/0"
+    mkdir -p "$SDCARD_DIR/.backup"
+    if [ ! -s "$SDCARD_DIR/.backup/vendor_orig${SLOT}.img" ]; then
+      ui_print "[*] Saving vendor backup to $SDCARD_DIR/.backup/vendor_orig${SLOT}.img..."
+      cp -f "$WORK/vendor_orig.img" "$SDCARD_DIR/.backup/vendor_orig${SLOT}.img" || true
+    fi
+  fi
+
+  # 4. Extract EROFS
+  ui_print "[*] Extracting vendor EROFS image..."
+  "$WORK/tools/extract.erofs" -i "$WORK/vendor_orig.img" -x "$WORK/extracted"
+  [ -d "$WORK/extracted/etc" ] || abort "Failed to extract vendor EROFS!"
+
+  # Check if fstab is already configured for unencrypted ext4 userdata
+  ALREADY_PATCHED=true
+  FOUND_DATA_ENTRY=false
+  for F in "$WORK/extracted/etc/"fstab*; do
+    [ -f "$F" ] || continue
+    if "$BB" grep -E '^[[:space:]]*[^#[:space:]]+[[:space:]]+/data[[:space:]]+' "$F" >/dev/null 2>&1; then
+      FOUND_DATA_ENTRY=true
+      DATA_LINE=$("$BB" grep -E '^[[:space:]]*[^#[:space:]]+[[:space:]]+/data[[:space:]]+' "$F" | head -n 1)
+      FS_ENTRY=$(echo "$DATA_LINE" | awk '{print $3}')
+      if [ "$FS_ENTRY" != "ext4" ]; then
+        ALREADY_PATCHED=false
+        break
+      fi
+      if echo "$DATA_LINE" | "$BB" grep -qiE 'fileencryption=|forceencrypt=|encryptable=|keydirectory='; then
+        ALREADY_PATCHED=false
+        break
+      fi
+    fi
+  done
+
+  if [ "$FOUND_DATA_ENTRY" = "true" ] && [ "$ALREADY_PATCHED" = "true" ]; then
+    ui_print "[+] Vendor fstab is ALREADY configured for unencrypted ext4 userdata!"
+    ui_print "    $DATA_LINE"
+    ui_print "[*] Skipping vendor repacking and flashing."
+    rm -rf "$WORK/extracted" "$WORK/vendor_orig.img"
+  else
+    # 5. Patch fstab files
+    ui_print "[*] Patching vendor fstab (/data -> unencrypted ext4)..."
+    PATCHED_ANY=false
+    for F in "$WORK/extracted/etc/"fstab*; do
+      [ -f "$F" ] || continue
+      if "$BB" grep -E '^[[:space:]]*[^#[:space:]]+[[:space:]]+/data[[:space:]]+' "$F" >/dev/null 2>&1; then
+        ui_print "    [*] Patching $(basename "$F")..."
+        "$BB" sed -i 's|^/dev/block/by-name/userdata[[:space:]].*|/dev/block/by-name/userdata /data ext4 noatime,nosuid,nodev,discard,resgid=1065 wait,check,formattable,quota,latemount,resize,reservedsize=128m|' "$F"
+        PATCHED_ANY=true
+      fi
+    done
+    [ "$PATCHED_ANY" = "true" ] || abort "No active /data fstab entry found to patch in vendor!"
+
+    # 6. Repack EROFS
+    ui_print "[*] Repacking EROFS image with mkfs.erofs (-zlz4hc,level=12)..."
+    FC_FILE="$WORK/extracted/etc/selinux/vendor_file_contexts"
+    COMBINED_FC="$WORK/combined_file_contexts"
+    if [ -f "$FC_FILE" ]; then
+      if [ -f "/plat_file_contexts" ]; then
+        cat "/plat_file_contexts" "$FC_FILE" > "$COMBINED_FC"
+      elif [ -f "/system/etc/selinux/plat_file_contexts" ]; then
+        cat "/system/etc/selinux/plat_file_contexts" "$FC_FILE" > "$COMBINED_FC"
+      else
+        echo '/(vendor|system/vendor)(/.*)? u:object_r:vendor_file:s0' > "$COMBINED_FC"
+        echo '/(vendor|system/vendor)/bin/boringssl_self_test(32|64) u:object_r:vendor_boringssl_self_test_exec:s0' >> "$COMBINED_FC"
+        cat "$FC_FILE" >> "$COMBINED_FC"
+      fi
+      "$WORK/tools/mkfs.erofs" -zlz4hc,level=12 -T 1230768000 -U 49911ede-c544-3978-11fe-1cb76c7de057 --mount-point=/vendor --file-contexts="$COMBINED_FC" "$WORK/vendor_patched.img" "$WORK/extracted" >/dev/null
+    else
+      "$WORK/tools/mkfs.erofs" -zlz4hc,level=12 -T 1230768000 -U 49911ede-c544-3978-11fe-1cb76c7de057 --mount-point=/vendor "$WORK/vendor_patched.img" "$WORK/extracted" >/dev/null
+    fi
+
+    [ -s "$WORK/vendor_patched.img" ] || abort "Repacked vendor_patched.img is empty or missing!"
+    NEW_SIZE=$("$BB" stat -c '%s' "$WORK/vendor_patched.img")
+    ui_print "[*] Repacked EROFS size: $NEW_SIZE bytes (limit: $ORIG_SIZE bytes)"
+    if [ "$NEW_SIZE" -gt "$ORIG_SIZE" ]; then
+      abort "Repacked vendor image ($NEW_SIZE) exceeds partition size ($ORIG_SIZE)!"
+    fi
+
+    # Free space in /tmp before flashing
+    rm -rf "$WORK/extracted" "$WORK/vendor_orig.img"
+
+    # 7. Flash Patched Vendor Image
+    ui_print "[*] Flashing patched vendor image to $VENDOR_PART..."
+    blockdev --setrw "$VENDOR_PART" 2>/dev/null || true
+    dd if="$WORK/vendor_patched.img" of="$VENDOR_PART" bs=4M
+    sync
+    rm -f "$WORK/vendor_patched.img"
+    ui_print "[+] Successfully flashed vendor${SLOT}!"
+  fi
 fi
 
-[ -s "$WORK/vendor_patched.img" ] || abort "Repacked vendor_patched.img is empty or missing!"
-NEW_SIZE=$("$BB" stat -c '%s' "$WORK/vendor_patched.img")
-ui_print "[*] Repacked EROFS size: $NEW_SIZE bytes (limit: $ORIG_SIZE bytes)"
-if [ "$NEW_SIZE" -gt "$ORIG_SIZE" ]; then
-  abort "Repacked vendor image ($NEW_SIZE) exceeds partition size ($ORIG_SIZE)!"
-fi
-
-# Free space in /tmp before flashing
-rm -rf "$WORK/extracted" "$WORK/vendor_orig.img"
-
-# 7. Flash Patched Vendor Image
-ui_print "[*] Flashing patched vendor image to $VENDOR_PART..."
-blockdev --setrw "$VENDOR_PART" 2>/dev/null || true
-dd if="$WORK/vendor_patched.img" of="$VENDOR_PART" bs=4M
-sync
-rm -f "$WORK/vendor_patched.img"
-ui_print "[+] Successfully flashed vendor${SLOT}!"
-
-# 8. Handle VBMETA (patch)
+# 8. Handle VBMETA (__VBMETA_MODE__)
 VBMETA_MODE="patch"
 if [ "$VBMETA_MODE" = "prebuilt" ]; then
   ui_print "[*] Flashing pre-disabled vbmeta images to slot $SLOT..."
