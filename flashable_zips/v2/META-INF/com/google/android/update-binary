@@ -322,9 +322,9 @@ else
   fi
 fi
 
-# 8. Handle VBMETA (__VBMETA_MODE__)
+# 8. Handle VBMETA (patch)
 VBMETA_MODE="patch"
-if [ "$VBMETA_MODE" = "prebuilt" ]; then
+if [ "$VBMETA_MODE" = "prebuilt" ] || [ -f "$WORK/vbmeta/vbmeta.img" ]; then
   ui_print "[*] Flashing pre-disabled vbmeta images to slot $SLOT..."
   for part in vbmeta vbmeta_system vbmeta_vendor; do
     TARGET_PART="/dev/block/by-name/${part}${SLOT}"
@@ -399,8 +399,25 @@ if [ -e "$USERDATA_PART" ]; then
     done
     ui_print "[+] Secured kernel backups in $BACKUP_DIR"
 
-    ui_print "[*] Extracting ubuntu-touch-hybris-rootfs-arm64.tar.gz to /data/ubuntu..."
-    unzip -p "$ZIPFILE" "ubuntu-touch-hybris-rootfs-arm64.tar.gz" | "$BB" tar --numeric-owner -xzpf - -C /data/ubuntu/
+    # Check if a valid Ubuntu Touch rootfs is already installed
+    IS_ROOTFS_INSTALLED=0
+    if [ -f "/data/.clean_install" ] || [ -f "/data/ubuntu/.clean_install" ]; then
+      ui_print "[!] Clean install requested (.clean_install detected)."
+      ui_print "[*] Removing existing /data/ubuntu rootfs..."
+      rm -rf /data/ubuntu
+      mkdir -p /data/ubuntu
+      rm -f /data/.clean_install /data/ubuntu/.clean_install 2>/dev/null || true
+    elif [ -d "/data/ubuntu/usr" ] && [ -d "/data/ubuntu/etc" ] && [ -f "/data/ubuntu/etc/os-release" ]; then
+      IS_ROOTFS_INSTALLED=1
+    fi
+
+    if [ "$IS_ROOTFS_INSTALLED" -eq 1 ]; then
+      ui_print "[*] Existing Ubuntu Touch installation detected in /data/ubuntu."
+      ui_print "[*] Skipping base rootfs extraction (preserving system state & user data)..."
+    else
+      ui_print "[*] Extracting ubuntu-touch-hybris-rootfs-arm64.tar.gz to /data/ubuntu..."
+      unzip -p "$ZIPFILE" "ubuntu-touch-hybris-rootfs-arm64.tar.gz" | "$BB" tar --numeric-owner -xzpf - -C /data/ubuntu/
+    fi
 
     # Extract Halium 12 LXC container (android-rootfs.img)
     mkdir -p /data/ubuntu/var/lib/lxc/android
@@ -414,9 +431,11 @@ if [ -e "$USERDATA_PART" ]; then
         unzip -p "$ZIPFILE" "android-rootfs.img" > /data/ubuntu/var/lib/lxc/android/android-rootfs.img
       fi
       chmod 644 /data/ubuntu/var/lib/lxc/android/android-rootfs.img 2>/dev/null || true
+    else
+      ui_print "[*] Android LXC container (android-rootfs.img) already present, skipping."
     fi
 
-    ui_print "[*] Extracting device_tanzanite_system.tar.gz overlay to /data/ubuntu..."
+    ui_print "[*] Applying device_tanzanite_system.tar.gz overlay to /data/ubuntu..."
     rm -f /data/ubuntu/usr/lib/aarch64-linux-gnu/mir/server-platform/graphics-android.so.15 \
           /data/ubuntu/usr/lib/aarch64-linux-gnu/mir/server-platform/graphics-android-caf.so.15 \
           /data/ubuntu/usr/lib/aarch64-linux-gnu/mir/client-platform/android.so.5 \
@@ -427,10 +446,14 @@ if [ -e "$USERDATA_PART" ]; then
       ui_print "[*] Using busybox tar to apply device overlay..."
       unzip -p "$ZIPFILE" "device_tanzanite_system.tar.gz" | "$BB" gzip -dc | "$BB" tar --numeric-owner -xpf - -C /data/ubuntu/
     fi
-    touch /data/ubuntu/.writable_image /data/.writable_image /data/.force-adb
+    touch /data/ubuntu/.writable_image /data/.writable_image /data/.force-adb /data/ubuntu/.rootfs_installed
 
     [ -d "/data/ubuntu/usr" ] && [ -d "/data/ubuntu/etc" ] && [ -s "/data/ubuntu/var/lib/lxc/android/android-rootfs.img" ] || abort "Rootfs extraction verification failed!"
-    ui_print "[+] Ubuntu Touch rootfs, Android LXC container & device overlay extracted to /data/ubuntu!"
+    if [ "$IS_ROOTFS_INSTALLED" -eq 1 ]; then
+      ui_print "[+] Ubuntu Touch rootfs updated with latest device overlay!"
+    else
+      ui_print "[+] Ubuntu Touch rootfs, Android LXC container & device overlay extracted to /data/ubuntu!"
+    fi
 
     # Provision Ubuntu Touch apt dependencies and sandbox fixes
     ui_print "[*] Configuring apt dependencies and sandbox in /data/ubuntu..."

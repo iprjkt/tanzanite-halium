@@ -44,6 +44,7 @@ mkdir -p "$TMP_STAGE/partitions"
 # Meta files
 echo "# dummy" > "$TMP_STAGE/META-INF/com/google/android/updater-script"
 cp -f "$SCRIPT_DIR/update-binary.template.sh" "$TMP_STAGE/META-INF/com/google/android/update-binary"
+sed -i 's/__VBMETA_MODE__/prebuilt/g' "$TMP_STAGE/META-INF/com/google/android/update-binary"
 chmod 755 "$TMP_STAGE/META-INF/com/google/android/update-binary"
 
 # Tools
