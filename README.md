@@ -84,11 +84,12 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 
 ## 🚀 Installation & Flashing Guide
 
-Untuk panduan lengkap langkah demi langkah cara instalasi dual-boot, silakan baca:
-👉 **[Panduan Flashing Lengkap (FLASHING_GUIDE.md)](docs/FLASHING_GUIDE.md)**
+Panduan lengkap instalasi dual-boot tersedia dalam dua bahasa:
+- 🇮🇩 **[Panduan Flashing (Bahasa Indonesia)](docs/FLASHING_GUIDE_id.md)**
+- 🇬🇧 **[Flashing Guide (English)](docs/FLASHING_GUIDE_en.md)**
 
 Ringkasan langkah instalasi:
-1. **Format Data ke ext4**: Format data & ubah filesystem `/data` ke `ext4` (unencrypted) di OrangeFox/TWRP, lalu reboot recovery.
+1. **Format Data ke ext4**: Format data & ubah filesystem `/data` ke `ext4` (unencrypted) di OrangeFox/TWRP (atau flash `Format-Data-Ext4-Tanzanite.zip`), lalu reboot recovery.
 2. **Set Active Slot ke Slot A**: Pastikan berada di Slot A (Slot B tetap sebagai stock HyperOS).
 3. **Flash `tanzanite-halium.zip`**: Install zip melalui recovery untuk mem-patch vendor, disable AVB, ekstrak rootfs ke `/data/ubuntu`, dan flash kernel Halium.
 4. **Reboot System**: Masuk ke Ubuntu Touch Focal.
@@ -107,7 +108,8 @@ Ringkasan langkah instalasi:
 - [`ramdisk-overlay/`](file:///home/fxxyz73/tanzanite-halium/ramdisk-overlay) - Boot ramdisk modifications.
 - [`vendor-ramdisk-overlay/`](file:///home/fxxyz73/tanzanite-halium/vendor-ramdisk-overlay) - Prebuilt MediaTek vendor kernel modules.
 - [`docs/`](file:///home/fxxyz73/tanzanite-halium/docs) - Technical documentation and troubleshooting guides:
-  - [`FLASHING_GUIDE.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE.md): Step-by-step flashing & dual-boot installation guide.
+  - [`FLASHING_GUIDE_id.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_id.md): Panduan lengkap flashing & instalasi dual-boot (Bahasa Indonesia).
+  - [`FLASHING_GUIDE_en.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_en.md): Step-by-step flashing & dual-boot installation guide (English).
   - [`TROUBLESHOOTING_SDCARD_APT.md`](file:///home/fxxyz73/tanzanite-halium/docs/TROUBLESHOOTING_SDCARD_APT.md): Fix for HyperOS `/sdcard` storage access & Ubuntu Touch `apt` sandbox.
 
 ---
