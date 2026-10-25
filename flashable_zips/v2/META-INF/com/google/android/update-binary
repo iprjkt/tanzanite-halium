@@ -385,14 +385,35 @@ if [ -e "$USERDATA_PART" ]; then
     mountpoint -q /data 2>/dev/null || mount -t ext4 "$USERDATA_PART" /data
     mkdir -p /data/ubuntu
 
+    # Secure Halium & Stock boot/vendor_boot/dtbo backups early before rootfs extraction
+    BACKUP_DIR="/data/media/0/.backup"
+    mkdir -p "$BACKUP_DIR" 2>/dev/null || true
+    cp -f "$WORK/partitions/boot.img" "$BACKUP_DIR/boot_halium.img" 2>/dev/null || true
+    cp -f "$WORK/partitions/vendor_boot.img" "$BACKUP_DIR/vendor_boot_halium.img" 2>/dev/null || true
+    cp -f "$WORK/partitions/dtbo.img" "$BACKUP_DIR/dtbo_halium.img" 2>/dev/null || true
+
+    for p in boot vendor_boot dtbo; do
+      if [ -s "$WORK/stock_backup/${p}_stock.img" ]; then
+        [ -s "$BACKUP_DIR/${p}_stock.img" ] || cp -f "$WORK/stock_backup/${p}_stock.img" "$BACKUP_DIR/${p}_stock.img" 2>/dev/null || true
+      fi
+    done
+    ui_print "[+] Secured kernel backups in $BACKUP_DIR"
+
     ui_print "[*] Extracting ubuntu-touch-hybris-rootfs-arm64.tar.gz to /data/ubuntu..."
     unzip -p "$ZIPFILE" "ubuntu-touch-hybris-rootfs-arm64.tar.gz" | "$BB" tar --numeric-owner -xzpf - -C /data/ubuntu/
 
-    if unzip -l "$ZIPFILE" "android-rootfs.img" >/dev/null 2>&1; then
-      ui_print "[*] Extracting android-rootfs.img (Halium 12 LXC container)..."
-      mkdir -p /data/ubuntu/var/lib/lxc/android
-      unzip -p "$ZIPFILE" "android-rootfs.img" > /data/ubuntu/var/lib/lxc/android/android-rootfs.img
-      chmod 644 /data/ubuntu/var/lib/lxc/android/android-rootfs.img
+    # Extract Halium 12 LXC container (android-rootfs.img)
+    mkdir -p /data/ubuntu/var/lib/lxc/android
+    if [ ! -s "/data/ubuntu/var/lib/lxc/android/android-rootfs.img" ]; then
+      if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "halium_halium_arm64.tar.xz"; then
+        ui_print "[*] Extracting android-rootfs.img from halium_halium_arm64.tar.xz..."
+        unzip -p "$ZIPFILE" "halium_halium_arm64.tar.xz" | "$BB" xzcat | "$BB" tar --numeric-owner -xpf - --strip-components=1 -C /data/ubuntu/ system/var/lib/lxc/android/android-rootfs.img 2>/dev/null || \
+        unzip -p "$ZIPFILE" "halium_halium_arm64.tar.xz" | "$BB" tar --numeric-owner -xJf - --strip-components=1 -C /data/ubuntu/ system/var/lib/lxc/android/android-rootfs.img 2>/dev/null || true
+      elif unzip -l "$ZIPFILE" 2>/dev/null | grep -q "android-rootfs.img"; then
+        ui_print "[*] Extracting android-rootfs.img..."
+        unzip -p "$ZIPFILE" "android-rootfs.img" > /data/ubuntu/var/lib/lxc/android/android-rootfs.img
+      fi
+      chmod 644 /data/ubuntu/var/lib/lxc/android/android-rootfs.img 2>/dev/null || true
     fi
 
     ui_print "[*] Extracting device_tanzanite_system.tar.gz overlay to /data/ubuntu..."
@@ -400,7 +421,12 @@ if [ -e "$USERDATA_PART" ]; then
           /data/ubuntu/usr/lib/aarch64-linux-gnu/mir/server-platform/graphics-android-caf.so.15 \
           /data/ubuntu/usr/lib/aarch64-linux-gnu/mir/client-platform/android.so.5 \
           /data/ubuntu/usr/lib/aarch64-linux-gnu/mir/client-platform/android-caf.so.5
-    unzip -p "$ZIPFILE" "device_tanzanite_system.tar.gz" | chroot /data/ubuntu /bin/tar --numeric-owner --overwrite -xzpf - -C /
+
+    # Decompress outside chroot via busybox gzip, pass uncompressed stream to chroot tar with explicit PATH, fallback to busybox tar
+    if ! unzip -p "$ZIPFILE" "device_tanzanite_system.tar.gz" | "$BB" gzip -dc | chroot /data/ubuntu /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/tar --numeric-owner --overwrite -xpf - -C / 2>/dev/null; then
+      ui_print "[*] Using busybox tar to apply device overlay..."
+      unzip -p "$ZIPFILE" "device_tanzanite_system.tar.gz" | "$BB" gzip -dc | "$BB" tar --numeric-owner -xpf - -C /data/ubuntu/
+    fi
     touch /data/ubuntu/.writable_image /data/.writable_image /data/.force-adb
 
     [ -d "/data/ubuntu/usr" ] && [ -d "/data/ubuntu/etc" ] && [ -s "/data/ubuntu/var/lib/lxc/android/android-rootfs.img" ] || abort "Rootfs extraction verification failed!"
@@ -416,19 +442,6 @@ if [ -e "$USERDATA_PART" ]; then
     mkdir -p /data/ubuntu/etc/sudoers.d
     echo 'phablet ALL=(ALL) NOPASSWD: /usr/bin/boot-to-android' > /data/ubuntu/etc/sudoers.d/99-boot-to-android
     chmod 440 /data/ubuntu/etc/sudoers.d/99-boot-to-android
-
-    # Save Halium & Stock boot/vendor_boot/dtbo backups to /data/media/0/.backup (/sdcard/.backup)
-    BACKUP_DIR="/data/media/0/.backup"
-    mkdir -p "$BACKUP_DIR"
-    cp -f "$WORK/partitions/boot.img" "$BACKUP_DIR/boot_halium.img"
-    cp -f "$WORK/partitions/vendor_boot.img" "$BACKUP_DIR/vendor_boot_halium.img"
-    cp -f "$WORK/partitions/dtbo.img" "$BACKUP_DIR/dtbo_halium.img"
-
-    for p in boot vendor_boot dtbo; do
-      if [ ! -s "$BACKUP_DIR/${p}_stock.img" ]; then
-        cp -f "$WORK/stock_backup/${p}_stock.img" "$BACKUP_DIR/${p}_stock.img"
-      fi
-    done
 
     # Ensure /data/media/0 has proper 2770 media_rw setgid permissions
     chown -R 1023:1023 /data/media 2>/dev/null || true
