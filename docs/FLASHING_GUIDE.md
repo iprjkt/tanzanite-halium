@@ -20,9 +20,10 @@ Panduan langkah demi langkah untuk melakukan instalasi **Ubuntu Touch 20.04 (Foc
 - **Root di Android (HyperOS)**: Terpasang **KernelSU** (direkomendasikan) atau Magisk agar switcher app dapat berjalan.
 
 #### File yang Dibutuhkan
-1. **`tanzanite-halium.zip`**: File installer flashable recovery (berisi kernel Halium, vendor patch, AVB patch, rootfs Ubuntu Touch, dan overlay driver).
-2. **`TanzaniteSwitcher-v1.0.0.apk`**: Aplikasi Android untuk berpindah OS secara instan.
-3. MicroSD atau Flashdisk OTG (atau PC dengan kabel data untuk ADB Sideload / ADB Push).
+1. **`Format-Data-Ext4-Tanzanite.zip`**: File flashable recovery untuk memformat partisi `/data` (`userdata`) ke ext4 tanpa enkripsi (mengatasi bug bawaan GUI OrangeFox).
+2. **`tanzanite-halium.zip`**: File installer flashable recovery utama (berisi kernel Halium, vendor patch, AVB patch, rootfs Ubuntu Touch, dan overlay driver).
+3. **`TanzaniteSwitcher-v1.0.0.apk`**: Aplikasi Android untuk berpindah OS secara instan.
+4. MicroSD atau Flashdisk OTG (atau PC dengan kabel data untuk ADB Sideload / ADB Push).
 
 > [!CAUTION]
 > **PENTING: Backup Data Anda!**
@@ -35,6 +36,23 @@ Panduan langkah demi langkah untuk melakukan instalasi **Ubuntu Touch 20.04 (Foc
 2. Tahan tombol **Power + Volume Up** secara bersamaan hingga logo recovery (OrangeFox / TWRP) muncul.
 
 #### Langkah 2: Format Data ke Unencrypted ext4
+> [!TIP]
+> **Mengatasi Bug Format OrangeFox Tanzanite**:
+> OrangeFox versi Tanzanite sering gagal atau mengalami error saat memformat `/data` atau mengubah filesystem ke ext4 lewat menu GUI (partisi tertahan busy, atau enkripsi FBE/F2FS lama tidak terhapus bersih). Gunakan **Metode A** menggunakan script flashable yang telah disediakan.
+
+**Metode A: Menggunakan Flashable Zip (Sangat Direkomendasikan)**:
+1. Salin `Format-Data-Ext4-Tanzanite.zip` ke MicroSD / OTG (atau gunakan menu **Advanced > ADB Sideload**).
+2. Di recovery, buka menu **Install** (atau `adb sideload Format-Data-Ext4-Tanzanite.zip`).
+3. Geser konfirmasi untuk mem-flash. Script akan otomatis:
+   - Melepaskan kuncian proses dan melakukan unmount paksa pada `/data` & `/sdcard`.
+   - Meng-zero out header & footer partisi (menghapus tuntas signature F2FS & crypto tokens FBE).
+   - Memformat partisi `userdata` ke ext4 4K block size (`-b 4096`) dengan reserve 1%.
+   - Menginisialisasi kerangka direktori internal storage `/data/media/0` dengan permission `media_rw`.
+4. **Wajib Reboot Recovery**:
+   - Pilih menu **Reboot** > **Recovery**.
+   - *Langkah ini mutlak diperlukan agar kernel recovery memuat ulang tabel partisi ext4 yang baru.*
+
+**Metode B: Manual via Menu Recovery GUI**:
 1. Di menu utama recovery, masuk ke menu **Wipe** > pilih **Format Data**.
 2. Ketik `yes` lalu konfirmasi.
 3. Masuk ke **Manage Partitions** / **Partition Options**:
@@ -42,7 +60,6 @@ Panduan langkah demi langkah untuk melakukan instalasi **Ubuntu Touch 20.04 (Foc
    - (Jika tersedia di opsi menu) Lakukan hal yang sama pada partisi **Metadata** ke **ext4**.
 4. **Wajib Reboot Recovery**:
    - Pilih **Reboot** > **Recovery**.
-   - Langkah ini krusial agar kernel recovery memuat ulang tabel partisi ext4 yang baru.
 
 #### Langkah 3: Pastikan Slot Aktif di Slot A
 1. Buka menu **Reboot** di recovery.
@@ -138,9 +155,10 @@ Step-by-step installation guide for setting up **Ubuntu Touch 20.04 (Focal Fossa
 - **Android Root (HyperOS)**: **KernelSU** installed (recommended) or Magisk to permit the switcher app to manage boot partitions.
 
 #### Required Files
-1. **`tanzanite-halium.zip`**: Flashable recovery installer package (contains Halium kernel, vendor fstab patch, AVB patch, Ubuntu Touch rootfs, and device overlay).
-2. **`TanzaniteSwitcher-v1.0.0.apk`**: Native Android companion app for 1-tap switching.
-3. MicroSD card or USB OTG flash drive (or a PC with ADB cable for ADB Sideload / ADB Push).
+1. **`Format-Data-Ext4-Tanzanite.zip`**: Flashable recovery utility to format `/data` (`userdata`) to clean unencrypted ext4 (fixes OrangeFox GUI format bugs).
+2. **`tanzanite-halium.zip`**: Flashable recovery installer package (contains Halium kernel, vendor fstab patch, AVB patch, Ubuntu Touch rootfs, and device overlay).
+3. **`TanzaniteSwitcher-v1.0.0.apk`**: Native Android companion app for 1-tap switching.
+4. MicroSD card or USB OTG flash drive (or a PC with ADB cable for ADB Sideload / ADB Push).
 
 > [!CAUTION]
 > **IMPORTANT: Back Up All Personal Data!**
@@ -153,6 +171,23 @@ Step-by-step installation guide for setting up **Ubuntu Touch 20.04 (Focal Fossa
 2. Press and hold **Power + Volume Up** buttons simultaneously until the recovery splash screen (OrangeFox / TWRP) appears.
 
 #### Step 2: Format Data to Unencrypted ext4
+> [!TIP]
+> **Resolving OrangeFox Tanzanite Format Bugs**:
+> OrangeFox on Tanzanite frequently encounters errors or fails to completely strip FBE/F2FS metadata when formatting `/data` via the recovery touch GUI (partition left busy or misdetected). Use **Method A** with the provided flashable zip for a guaranteed clean format.
+
+**Method A: Flashable Zip Utility (Highly Recommended)**:
+1. Copy `Format-Data-Ext4-Tanzanite.zip` to a MicroSD / USB OTG drive (or use **Advanced > ADB Sideload**).
+2. In recovery, select **Install** (or run `adb sideload Format-Data-Ext4-Tanzanite.zip`).
+3. Swipe to confirm flash. The script will automatically:
+   - Terminate active locks and forcefully unmount `/data` & `/sdcard`.
+   - Zero out partition headers and footers (erasing F2FS magic and FBE crypto tokens).
+   - Format `userdata` to 4K ext4 (`-b 4096`) with a 1% reservation ratio.
+   - Initialize `/data/media/0` internal storage directory structure with proper `media_rw` permissions.
+4. **Mandatory Recovery Reboot**:
+   - Go to **Reboot** > select **Recovery**.
+   - *This step is essential so the recovery kernel refreshes its partition table.*
+
+**Method B: Manual via Recovery GUI**:
 1. From the recovery main menu, navigate to **Wipe** > select **Format Data**.
 2. Type `yes` and confirm.
 3. Open **Manage Partitions** / **Partition Options**:
@@ -160,7 +195,6 @@ Step-by-step installation guide for setting up **Ubuntu Touch 20.04 (Focal Fossa
    - (If accessible in the recovery menu) Perform the same step for the **Metadata** partition to format it to **ext4**.
 4. **Mandatory Recovery Reboot**:
    - Go to **Reboot** > select **Recovery**.
-   - *This step is crucial so the recovery kernel refreshes and recognizes the new ext4 partition table properly.*
 
 #### Step 3: Ensure Active Slot is Slot A
 1. Navigate to the **Reboot** menu in recovery.
