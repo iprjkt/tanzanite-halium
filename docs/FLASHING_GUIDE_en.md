@@ -82,7 +82,6 @@ Step-by-step installation guide for setting up **Ubuntu Touch 20.04 (Focal Fossa
    - Backs up stock `boot`, `vendor_boot`, and `dtbo` partitions to `/sdcard/.backup/`.
    - Extracts Ubuntu Touch rootfs and the Halium container into `/data/ubuntu`.
    - Deploys HWC2 display platform drivers (`mir-android2`), audio routing, udev rules, and `apt` sandboxing configuration.
-   - Deploys the KernelSU FUSE-BPF hook under `/data/adb/post-fs-data.d/`.
    - Flashes the Halium kernel (`boot`, `vendor_boot`, `dtbo`) into Slot A.
 
 ### Step 5: Initial Boot into Ubuntu Touch
@@ -118,16 +117,11 @@ Step-by-step installation guide for setting up **Ubuntu Touch 20.04 (Focal Fossa
 
 ### Internal Storage (`/sdcard`) Permission Denied on HyperOS
 If HyperOS apps cannot access photos, downloads, or internal storage:
-- **Cause**: FUSE-BPF on the MT6789 kernel enforces strict lower-inode credential checks. If `/data/media/0` lacks `media_rw` group ownership, apps are denied access.
+- **Cause**: FUSE-BPF on the MT6789 kernel enforces strict lower-inode credential checks. If `/data/media/0` lacks `media_rw` group ownership on decrypted ext4 userdata, apps are denied access.
 - **Fix**:
-  1. Ensure the KernelSU post-fs-data hook exists at `/data/adb/post-fs-data.d/99-disable-fuse-bpf.sh`:
-     ```sh
-     resetprop ro.fuse.bpf.enabled false
-     resetprop ro.fuse.bpf.is_running false
-     resetprop persist.sys.fuse.bpf.override false
-     resetprop persist.sys.fuse.passthrough.enable false
-     ```
-  2. Open a root terminal in Android and restore directory permissions:
+  1. Install the standalone module [Tanzanite-HyperOS-SDCard-Fix-KSU.zip](file:///home/fxxyz73/tanzanite-halium/out/Tanzanite-HyperOS-SDCard-Fix-KSU.zip) via the **KernelSU** or **Magisk** app in HyperOS, or flash it in OrangeFox Recovery.
+  2. The module disables FUSE-BPF during early `post-fs-data` by applying `ro.fuse.bpf.enabled=false`, `ro.fuse.bpf.is_running=false`, `persist.sys.fuse.bpf.override=false`, and `persist.sys.fuse.passthrough.enable=false`.
+  3. If needed, open a root terminal in Android and restore directory permissions:
      ```sh
      chown -R 1023:1023 /data/media
      chmod 770 /data/media

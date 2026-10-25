@@ -82,7 +82,6 @@ Panduan langkah demi langkah untuk menginstal **Ubuntu Touch 20.04 (Focal Fossa)
    - Membuat cadangan partisi `boot`, `vendor_boot`, dan `dtbo` bawaan ke `/sdcard/.backup/`.
    - Mengekstrak rootfs Ubuntu Touch dan container Halium ke `/data/ubuntu`.
    - Memasang driver tampilan HWC2, konfigurasi audio, udev rules, dan pengaturan sandboxing `apt`.
-   - Menambahkan hook KernelSU FUSE-BPF di `/data/adb/post-fs-data.d/`.
    - Mem-flash image kernel Halium (`boot`, `vendor_boot`, `dtbo`) ke Slot A.
 
 ### Langkah 5: Booting Pertama ke Ubuntu Touch
@@ -118,16 +117,11 @@ Panduan langkah demi langkah untuk menginstal **Ubuntu Touch 20.04 (Focal Fossa)
 
 ### Akses Penyimpanan Internal (`/sdcard`) Tertolak di HyperOS
 Jika aplikasi di HyperOS tidak dapat membaca galeri, folder unduhan, atau `/sdcard`:
-- **Penyebab**: FUSE-BPF pada kernel MT6789 memblokir akses ketika folder `/data/media/0` belum memiliki izin kepemilikan `media_rw`.
+- **Penyebab**: FUSE-BPF pada kernel MT6789 memblokir akses ketika folder `/data/media/0` belum memiliki izin kepemilikan `media_rw` pada userdata ext4 yang didekripsi.
 - **Solusi**:
-  1. Pastikan script KernelSU berikut berada di `/data/adb/post-fs-data.d/99-disable-fuse-bpf.sh`:
-     ```sh
-     resetprop ro.fuse.bpf.enabled false
-     resetprop ro.fuse.bpf.is_running false
-     resetprop persist.sys.fuse.bpf.override false
-     resetprop persist.sys.fuse.passthrough.enable false
-     ```
-  2. Buka terminal root di Android lalu perbaiki izin direktori:
+  1. Pasang modul terpisah [Tanzanite-HyperOS-SDCard-Fix-KSU.zip](file:///home/fxxyz73/tanzanite-halium/out/Tanzanite-HyperOS-SDCard-Fix-KSU.zip) langsung lewat aplikasi **KernelSU** / **Magisk** di HyperOS, atau flash zip tersebut di OrangeFox Recovery.
+  2. Modul ini secara otomatis mengatur properti `ro.fuse.bpf.enabled=false`, `ro.fuse.bpf.is_running=false`, `persist.sys.fuse.bpf.override=false`, dan `persist.sys.fuse.passthrough.enable=false` pada tahap `post-fs-data`.
+  3. Jika diperlukan, buka terminal root di Android lalu perbaiki izin direktori:
      ```sh
      chown -R 1023:1023 /data/media
      chmod 770 /data/media

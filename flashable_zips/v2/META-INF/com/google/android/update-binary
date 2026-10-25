@@ -373,18 +373,6 @@ if [ -e "$USERDATA_PART" ]; then
     echo 'phablet ALL=(ALL) NOPASSWD: /usr/bin/boot-to-android' > /data/ubuntu/etc/sudoers.d/99-boot-to-android
     chmod 440 /data/ubuntu/etc/sudoers.d/99-boot-to-android
 
-    # Provision KernelSU post-fs-data fix for HyperOS /sdcard (disable fuse-bpf)
-    ui_print "[*] Installing HyperOS FUSE-BPF fix to /data/adb/post-fs-data.d/..."
-    mkdir -p /data/adb/post-fs-data.d
-    cat << 'EOF' > /data/adb/post-fs-data.d/99-disable-fuse-bpf.sh
-#!/system/bin/sh
-resetprop ro.fuse.bpf.enabled false
-resetprop ro.fuse.bpf.is_running false
-resetprop persist.sys.fuse.bpf.override false
-resetprop persist.sys.fuse.passthrough.enable false
-EOF
-    chmod 755 /data/adb/post-fs-data.d/99-disable-fuse-bpf.sh
-
     # Save Halium & Stock boot/vendor_boot/dtbo backups to /data/media/0/.backup (/sdcard/.backup)
     BACKUP_DIR="/data/media/0/.backup"
     mkdir -p "$BACKUP_DIR"

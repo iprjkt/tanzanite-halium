@@ -29,19 +29,24 @@
 2. **Owner/grup salah di `/data/media/0/*`.** Folder `/data/media/0/.backup` dibuat dari OrangeFox (sebagai `root:root`) **sebelum** HyperOS boot pertama di `/data` ext4 yang baru diformat. Akibatnya folder standar (`Download`, `DCIM`, `Pictures`, `MIUI`, …) dibuat oleh `MediaProvider` sebagai `u0_a219:u0_a219` mode `0770`, tanpa grup `media_rw` dan tanpa bit setgid.
 
 #### Perbaikan
-**a. Matikan FUSE-BPF secara permanen** lewat script `post-fs-data` KernelSU (dijalankan sebelum `vold` me-mount storage):
+**a. Matikan FUSE-BPF secara permanen**
+Gunakan salah satu dari dua cara berikut:
 
-`/data/adb/post-fs-data.d/99-disable-fuse-bpf.sh`
-```sh
-#!/system/bin/sh
-resetprop ro.fuse.bpf.enabled false
-resetprop ro.fuse.bpf.is_running false
-resetprop persist.sys.fuse.bpf.override false
-resetprop persist.sys.fuse.passthrough.enable false
-```
-```sh
-chmod 755 /data/adb/post-fs-data.d/99-disable-fuse-bpf.sh
-```
+- **Metode 1: Pasang modul KernelSU / Magisk (Direkomendasikan)**
+  Pasang modul [Tanzanite-HyperOS-SDCard-Fix-KSU.zip](file:///home/fxxyz73/tanzanite-halium/out/Tanzanite-HyperOS-SDCard-Fix-KSU.zip) via aplikasi KernelSU / Magisk di HyperOS, atau flash lewat OrangeFox Recovery. Modul ini menyetel properti FUSE-BPF secara otomatis via `system.prop` dan `post-fs-data.sh`.
+
+- **Metode 2: Buat script manual `post-fs-data`**
+  Buat file `/data/adb/post-fs-data.d/99-disable-fuse-bpf.sh`:
+  ```sh
+  #!/system/bin/sh
+  resetprop ro.fuse.bpf.enabled false
+  resetprop ro.fuse.bpf.is_running false
+  resetprop persist.sys.fuse.bpf.override false
+  resetprop persist.sys.fuse.passthrough.enable false
+  ```
+  ```sh
+  chmod 755 /data/adb/post-fs-data.d/99-disable-fuse-bpf.sh
+  ```
 Setelah reboot, `dmesg` harus menampilkan:
 ```
 vold: fuse-bpf is disabled because of property ro.fuse.bpf.is_running
@@ -182,19 +187,24 @@ Hasil yang sudah dicek: semua label di `vendor_a` hasil repack sama dengan `vend
 2. **Wrong owner/group on `/data/media/0/*`.** `/data/media/0/.backup` was created from OrangeFox (as `root:root`) **before** HyperOS first booted on the freshly formatted ext4 `/data`. As a result, `MediaProvider` created the standard folders (`Download`, `DCIM`, `Pictures`, `MIUI`, …) as `u0_a219:u0_a219` mode `0770`, without the `media_rw` group or the setgid bit.
 
 #### Fix
-**a. Disable FUSE-BPF permanently** with a KernelSU `post-fs-data` script (it runs before `vold` mounts storage):
+**a. Disable FUSE-BPF permanently**
+Use either of the following two methods:
 
-`/data/adb/post-fs-data.d/99-disable-fuse-bpf.sh`
-```sh
-#!/system/bin/sh
-resetprop ro.fuse.bpf.enabled false
-resetprop ro.fuse.bpf.is_running false
-resetprop persist.sys.fuse.bpf.override false
-resetprop persist.sys.fuse.passthrough.enable false
-```
-```sh
-chmod 755 /data/adb/post-fs-data.d/99-disable-fuse-bpf.sh
-```
+- **Method 1: Install the KernelSU / Magisk Module (Recommended)**
+  Flash or install [Tanzanite-HyperOS-SDCard-Fix-KSU.zip](file:///home/fxxyz73/tanzanite-halium/out/Tanzanite-HyperOS-SDCard-Fix-KSU.zip) directly in the KernelSU / Magisk app in HyperOS, or flash it via OrangeFox Recovery. This module manages FUSE-BPF properties automatically through `system.prop` and `post-fs-data.sh`.
+
+- **Method 2: Create a manual `post-fs-data` hook script**
+  Place the following in `/data/adb/post-fs-data.d/99-disable-fuse-bpf.sh`:
+  ```sh
+  #!/system/bin/sh
+  resetprop ro.fuse.bpf.enabled false
+  resetprop ro.fuse.bpf.is_running false
+  resetprop persist.sys.fuse.bpf.override false
+  resetprop persist.sys.fuse.passthrough.enable false
+  ```
+  ```sh
+  chmod 755 /data/adb/post-fs-data.d/99-disable-fuse-bpf.sh
+  ```
 After a reboot, `dmesg` should show:
 ```
 vold: fuse-bpf is disabled because of property ro.fuse.bpf.is_running
