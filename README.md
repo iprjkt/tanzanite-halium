@@ -34,7 +34,7 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 | **Architecture** | `arm64-v8a` (64-bit) |
 | **Halium Version** | `12` |
 | **Target OS** | Ubuntu Touch Focal (20.04 LTS) |
-| **Kernel Source** | [iprjkt/evernight-gki](https://github.com/iprjkt/evernight-gki) (GKI Linux 5.10 with KernelSU) |
+| **Kernel Source** | [iprjkt/evernight-gki](https://github.com/iprjkt/evernight-gki) (GKI Linux 5.10) |
 | **Dual-Boot Mode** | Slot A partition swap with stock HyperOS fallback on Slot B |
 
 ---
