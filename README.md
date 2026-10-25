@@ -46,6 +46,7 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 | **Display / Touchscreen** | Working | Full resolution, multi-touch responsive |
 | **Lomiri UI / Compositor** | Working | Native Wayland via `lomiri-system-compositor` |
 | **GPU Acceleration** | Working | Mali-G57 MC2 via libhybris / Android 12 Gralloc & EGL |
+| **Battery & Power Management** | Working | Accurate fuelgauge reporting via UPower BMS filter shim |
 | **Audio (Speaker / Playback)** | Working | PulseAudio with Droid HAL 30 & clean Aurisys routing |
 | **Audio (Microphone / Input)** | Working | Primary mic routed through Droid source |
 | **Flashlight / Torch** | Working | Controlled via Ayatana Power Indicator & sysfs bridge daemon |
