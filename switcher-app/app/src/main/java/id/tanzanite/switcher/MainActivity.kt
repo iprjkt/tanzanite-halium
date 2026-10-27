@@ -9,6 +9,8 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -26,6 +28,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -204,6 +209,7 @@ object RootShell {
 
 class MainActivity : ComponentActivity() {
     private val selectedTabState = mutableIntStateOf(0)
+    private var floatingBarRef: LiquidGlassTabBar? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -233,7 +239,11 @@ class MainActivity : ComponentActivity() {
                     colors = if (darkTheme) darkColorScheme() else lightColorScheme()
                 ) {
                     MainAppScreen(
-                        selectedTab = selectedTabState.intValue
+                        selectedTab = selectedTabState.intValue,
+                        onTabChanged = { page ->
+                            selectedTabState.intValue = page
+                            floatingBarRef?.selectedIndex = page
+                        }
                     )
                 }
             }
@@ -243,6 +253,7 @@ class MainActivity : ComponentActivity() {
         val floatingBarWidth = (260 * density).toInt()
 
         val floatingBar = LiquidGlassTabBar(this).apply {
+            floatingBarRef = this
             layoutParams = FrameLayout.LayoutParams(
                 floatingBarWidth,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -289,11 +300,35 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainAppScreen(selectedTab: Int) {
+fun MainAppScreen(
+    selectedTab: Int,
+    onTabChanged: (Int) -> Unit
+) {
     val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(initialPage = selectedTab) { 2 }
 
     val switcherScrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val aboutScrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
+
+    // Sync tab changes from floating bar to pager with smooth spring animation
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage != selectedTab) {
+            pagerState.animateScrollToPage(
+                page = selectedTab,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+        }
+    }
+
+    // Sync pager swipe gestures back to floating bar
+    LaunchedEffect(pagerState.currentPage) {
+        if (selectedTab != pagerState.currentPage) {
+            onTabChanged(pagerState.currentPage)
+        }
+    }
 
     var status by remember { mutableStateOf(SystemStatus()) }
     var isBusy by remember { mutableStateOf(false) }
@@ -436,40 +471,66 @@ fun MainAppScreen(selectedTab: Int) {
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            if (selectedTab == 0) {
-                TopAppBar(
-                    title = "Tanzanite OS Switcher",
-                    largeTitle = "Tanzanite Dual-Boot",
-                    scrollBehavior = switcherScrollBehavior
-                )
-            } else {
-                TopAppBar(
-                    title = "About",
-                    largeTitle = "About",
-                    scrollBehavior = aboutScrollBehavior
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize()
+    ) { page ->
+        if (page == 0) {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                topBar = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MiuixTheme.colorScheme.surface)
+                    ) {
+                        TopAppBar(
+                            title = "Tanzanite OS Switcher",
+                            largeTitle = "Tanzanite Dual-Boot",
+                            scrollBehavior = switcherScrollBehavior
+                        )
+                    }
+                }
+            ) { innerPadding ->
+                SwitcherContent(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(switcherScrollBehavior.nestedScrollConnection),
+                    innerPadding = innerPadding,
+                    status = status,
+                    isBusy = isBusy,
+                    consoleLog = consoleLog,
+                    onRefresh = { refreshStatus() },
+                    onBackupStock = { backupCurrentStock() },
+                    onRequestUbuntu = { showConfirmUbuntu.value = true },
+                    onRequestRestore = { showConfirmAndroid.value = true }
                 )
             }
-        }
-    ) { innerPadding ->
-        if (selectedTab == 0) {
-            SwitcherContent(
-                innerPadding = innerPadding,
-                status = status,
-                isBusy = isBusy,
-                consoleLog = consoleLog,
-                onRefresh = { refreshStatus() },
-                onBackupStock = { backupCurrentStock() },
-                onRequestUbuntu = { showConfirmUbuntu.value = true },
-                onRequestRestore = { showConfirmAndroid.value = true }
-            )
         } else {
-            AboutContent(
-                innerPadding = innerPadding,
-                status = status
-            )
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                topBar = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MiuixTheme.colorScheme.surface)
+                    ) {
+                        TopAppBar(
+                            title = "About",
+                            largeTitle = "About",
+                            scrollBehavior = aboutScrollBehavior
+                        )
+                    }
+                }
+            ) { innerPadding ->
+                AboutContent(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(aboutScrollBehavior.nestedScrollConnection),
+                    innerPadding = innerPadding,
+                    status = status
+                )
+            }
         }
     }
 
@@ -534,6 +595,7 @@ fun MainAppScreen(selectedTab: Int) {
 
 @Composable
 fun SwitcherContent(
+    modifier: Modifier = Modifier,
     innerPadding: PaddingValues,
     status: SystemStatus,
     isBusy: Boolean,
@@ -545,7 +607,7 @@ fun SwitcherContent(
 ) {
     val layoutDirection = LocalLayoutDirection.current
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier,
         contentPadding = PaddingValues(
             top = innerPadding.calculateTopPadding() + 8.dp,
             bottom = 140.dp,
@@ -682,6 +744,7 @@ fun SwitcherContent(
 
 @Composable
 fun AboutContent(
+    modifier: Modifier = Modifier,
     innerPadding: PaddingValues,
     status: SystemStatus
 ) {
@@ -695,7 +758,7 @@ fun AboutContent(
 
     val layoutDirection = LocalLayoutDirection.current
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier,
         contentPadding = PaddingValues(
             top = innerPadding.calculateTopPadding() + 8.dp,
             bottom = 140.dp,
@@ -708,36 +771,36 @@ fun AboutContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 24.dp, bottom = 20.dp),
+                    .padding(top = 10.dp, bottom = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
-                        .size(92.dp)
-                        .shadow(elevation = 6.dp, shape = CircleShape)
+                        .size(80.dp)
+                        .shadow(elevation = 4.dp, shape = CircleShape)
                         .clip(CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
                         painter = painterResource(R.drawable.icon_app),
                         contentDescription = "App Icon",
-                        modifier = Modifier.size(92.dp)
+                        modifier = Modifier.size(80.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
                     text = "Tanzanite Switcher",
-                    fontSize = 24.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
                     text = "1.0.0 | Halium 12 Dual-Boot",
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = Color.Gray
                 )
             }
