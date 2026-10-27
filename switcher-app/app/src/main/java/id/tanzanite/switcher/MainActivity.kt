@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -81,6 +82,7 @@ import top.yukonga.miuix.kmp.icon.icons.useful.NavigatorSwitch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.utils.MiuixPopupUtils
 
 data class SystemStatus(
     val hasRoot: Boolean = false,
@@ -243,6 +245,33 @@ class MainActivity : ComponentActivity() {
                         onTabChanged = { page ->
                             selectedTabState.intValue = page
                             floatingBarRef?.selectedIndex = page
+                        },
+                        onDialogVisibilityChanged = { isShowing ->
+                            val bar = floatingBarRef ?: return@MainAppScreen
+                            val density = resources.displayMetrics.density
+                            bar.animate().cancel()
+                            if (isShowing) {
+                                bar.isEnabled = false
+                                val transY = 220f * density
+                                bar.animate()
+                                    .translationY(transY)
+                                    .alpha(0f)
+                                    .setDuration(220)
+                                    .withEndAction {
+                                        if (bar.translationY > 50f * density) {
+                                            bar.visibility = View.GONE
+                                        }
+                                    }
+                                    .start()
+                            } else {
+                                bar.visibility = View.VISIBLE
+                                bar.isEnabled = true
+                                bar.animate()
+                                    .translationY(0f)
+                                    .alpha(1f)
+                                    .setDuration(250)
+                                    .start()
+                            }
                         }
                     )
                 }
@@ -302,7 +331,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainAppScreen(
     selectedTab: Int,
-    onTabChanged: (Int) -> Unit
+    onTabChanged: (Int) -> Unit,
+    onDialogVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(initialPage = selectedTab) { 2 }
@@ -335,6 +365,11 @@ fun MainAppScreen(
     var consoleLog by remember { mutableStateOf("Ready. Tap an action below.") }
     val showConfirmUbuntu = remember { mutableStateOf(false) }
     val showConfirmAndroid = remember { mutableStateOf(false) }
+
+    val isDialogShowing = showConfirmUbuntu.value || showConfirmAndroid.value
+    LaunchedEffect(isDialogShowing) {
+        onDialogVisibilityChanged(isDialogShowing)
+    }
 
     fun appendLog(msg: String) {
         consoleLog = (consoleLog + "\n" + msg).trim()
@@ -538,22 +573,26 @@ fun MainAppScreen(
         title = "Boot to Ubuntu Touch?",
         summary = "This will flash Halium boot, vendor_boot, and dtbo to active slot (${status.activeSlot}) and immediately reboot the device.",
         show = showConfirmUbuntu,
-        onDismissRequest = { showConfirmUbuntu.value = false }
+        onDismissRequest = { MiuixPopupUtils.dismissDialog(showConfirmUbuntu) }
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 TextButton(
                     text = "Cancel",
-                    onClick = { showConfirmUbuntu.value = false },
+                    onClick = { MiuixPopupUtils.dismissDialog(showConfirmUbuntu) },
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(
                     text = "Flash & Reboot",
                     onClick = {
-                        showConfirmUbuntu.value = false
+                        MiuixPopupUtils.dismissDialog(showConfirmUbuntu)
                         switchToUbuntuTouch(rebootNow = true)
                     },
                     modifier = Modifier.weight(1f),
@@ -567,22 +606,26 @@ fun MainAppScreen(
         title = "Restore Stock HyperOS?",
         summary = "This will flash boot_stock.img, vendor_boot_stock.img, and dtbo_stock.img from /sdcard/.backup/ back to slot ${status.activeSlot}.",
         show = showConfirmAndroid,
-        onDismissRequest = { showConfirmAndroid.value = false }
+        onDismissRequest = { MiuixPopupUtils.dismissDialog(showConfirmAndroid) }
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 TextButton(
                     text = "Cancel",
-                    onClick = { showConfirmAndroid.value = false },
+                    onClick = { MiuixPopupUtils.dismissDialog(showConfirmAndroid) },
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(
                     text = "Restore Only",
                     onClick = {
-                        showConfirmAndroid.value = false
+                        MiuixPopupUtils.dismissDialog(showConfirmAndroid)
                         restoreStockAndroid(rebootNow = false)
                     },
                     modifier = Modifier.weight(1f),
