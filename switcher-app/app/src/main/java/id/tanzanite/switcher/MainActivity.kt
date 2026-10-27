@@ -4,9 +4,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.View
+import android.view.Gravity
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -22,11 +23,8 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -42,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -49,8 +48,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.example.liquidglass.LiquidGlassTabBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -203,24 +203,88 @@ object RootShell {
 }
 
 class MainActivity : ComponentActivity() {
+    private val selectedTabState = mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            val darkTheme = isSystemInDarkTheme()
-            MiuixTheme(
-                colors = if (darkTheme) darkColorScheme() else lightColorScheme()
-            ) {
-                MainAppScreen()
+
+        val rootLayout = FrameLayout(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val composeView = ComposeView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setContent {
+                val darkTheme = isSystemInDarkTheme()
+                MiuixTheme(
+                    colors = if (darkTheme) darkColorScheme() else lightColorScheme()
+                ) {
+                    MainAppScreen(
+                        selectedTab = selectedTabState.intValue
+                    )
+                }
             }
         }
+
+        val density = resources.displayMetrics.density
+        val floatingBarWidth = (260 * density).toInt()
+
+        val floatingBar = LiquidGlassTabBar(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                floatingBarWidth,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            ).apply {
+                bottomMargin = (20 * density).toInt()
+            }
+            enableDynamicBackground = true
+            enableAdaptiveTint = true
+            cornerRadius = 999f
+            selectedTintColor = 0xFF0A84FF.toInt()
+            backdropSource = composeView
+
+            val switchDrawable = ContextCompat.getDrawable(context, R.drawable.ic_nav_switch)
+            val infoDrawable = ContextCompat.getDrawable(context, R.drawable.ic_nav_info)
+
+            setTabs(
+                listOf(
+                    LiquidGlassTabBar.TabItem("Switcher", switchDrawable),
+                    LiquidGlassTabBar.TabItem("About", infoDrawable)
+                )
+            )
+
+            this.selectedIndex = selectedTabState.intValue
+            this.onTabSelected = { index ->
+                selectedTabState.intValue = index
+            }
+        }
+
+        ViewCompat.setOnApplyWindowInsetsListener(floatingBar) { v, insets ->
+            val navInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            val lp = v.layoutParams as? FrameLayout.LayoutParams
+            if (lp != null) {
+                lp.bottomMargin = (20 * density).toInt() + navInsets.bottom
+                v.layoutParams = lp
+            }
+            insets
+        }
+
+        rootLayout.addView(composeView)
+        rootLayout.addView(floatingBar)
+        setContentView(rootLayout)
     }
 }
 
 @Composable
-fun MainAppScreen() {
+fun MainAppScreen(selectedTab: Int) {
     val scope = rememberCoroutineScope()
-    var selectedTab by remember { mutableIntStateOf(0) }
 
     val switcherScrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val aboutScrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
@@ -366,59 +430,48 @@ fun MainAppScreen() {
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                if (selectedTab == 0) {
-                    TopAppBar(
-                        title = "Tanzanite OS Switcher",
-                        largeTitle = "Tanzanite Dual-Boot",
-                        scrollBehavior = switcherScrollBehavior
-                    )
-                } else {
-                    TopAppBar(
-                        title = "About",
-                        largeTitle = "About",
-                        scrollBehavior = aboutScrollBehavior
-                    )
-                }
-            }
-        ) { innerPadding ->
-            val layoutDirection = LocalLayoutDirection.current
-            val contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = innerPadding.calculateBottomPadding() + 96.dp,
-                start = innerPadding.calculateStartPadding(layoutDirection),
-                end = innerPadding.calculateEndPadding(layoutDirection)
-            )
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
             if (selectedTab == 0) {
-                SwitcherContent(
-                    innerPadding = contentPadding,
-                    status = status,
-                    isBusy = isBusy,
-                    consoleLog = consoleLog,
-                    onRefresh = { refreshStatus() },
-                    onBackupStock = { backupCurrentStock() },
-                    onRequestUbuntu = { showConfirmUbuntu.value = true },
-                    onRequestRestore = { showConfirmAndroid.value = true }
+                TopAppBar(
+                    title = "Tanzanite OS Switcher",
+                    largeTitle = "Tanzanite Dual-Boot",
+                    scrollBehavior = switcherScrollBehavior
                 )
             } else {
-                AboutContent(
-                    innerPadding = contentPadding,
-                    status = status
+                TopAppBar(
+                    title = "About",
+                    largeTitle = "About",
+                    scrollBehavior = aboutScrollBehavior
                 )
             }
         }
-
-        LiquidGlassFloatingBar(
-            selectedTab = selectedTab,
-            onTabSelected = { selectedTab = it },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 16.dp)
+    ) { innerPadding ->
+        val layoutDirection = LocalLayoutDirection.current
+        val contentPadding = PaddingValues(
+            top = innerPadding.calculateTopPadding(),
+            bottom = innerPadding.calculateBottomPadding() + 96.dp,
+            start = innerPadding.calculateStartPadding(layoutDirection),
+            end = innerPadding.calculateEndPadding(layoutDirection)
         )
+        if (selectedTab == 0) {
+            SwitcherContent(
+                innerPadding = contentPadding,
+                status = status,
+                isBusy = isBusy,
+                consoleLog = consoleLog,
+                onRefresh = { refreshStatus() },
+                onBackupStock = { backupCurrentStock() },
+                onRequestUbuntu = { showConfirmUbuntu.value = true },
+                onRequestRestore = { showConfirmAndroid.value = true }
+            )
+        } else {
+            AboutContent(
+                innerPadding = contentPadding,
+                status = status
+            )
+        }
     }
 
     SuperDialog(
@@ -478,51 +531,6 @@ fun MainAppScreen() {
             }
         }
     }
-}
-
-@Composable
-fun LiquidGlassFloatingBar(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val switchDrawable = remember(context) { ContextCompat.getDrawable(context, R.drawable.ic_nav_switch) }
-    val infoDrawable = remember(context) { ContextCompat.getDrawable(context, R.drawable.ic_nav_info) }
-
-    AndroidView(
-        modifier = modifier
-            .width(260.dp)
-            .wrapContentHeight(),
-        factory = { ctx ->
-            LiquidGlassTabBar(ctx).apply {
-                enableDynamicBackground = true
-                enableAdaptiveTint = true
-                cornerRadius = 999f
-                selectedTintColor = 0xFF0A84FF.toInt()
-
-                val activity = ctx as? ComponentActivity
-                val root = activity?.findViewById<View>(android.R.id.content) ?: rootView
-                backdropSource = root
-
-                setTabs(
-                    listOf(
-                        LiquidGlassTabBar.TabItem("Switcher", switchDrawable),
-                        LiquidGlassTabBar.TabItem("About", infoDrawable)
-                    )
-                )
-                this.selectedIndex = selectedTab
-                this.onTabSelected = { index ->
-                    onTabSelected(index)
-                }
-            }
-        },
-        update = { view ->
-            if (view.selectedIndex != selectedTab) {
-                view.selectedIndex = selectedTab
-            }
-        }
-    )
 }
 
 @Composable
