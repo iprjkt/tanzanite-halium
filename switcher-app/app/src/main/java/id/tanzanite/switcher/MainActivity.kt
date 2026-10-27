@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -16,11 +17,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -37,11 +43,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import com.example.liquidglass.LiquidGlassTabBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -221,13 +231,6 @@ fun MainAppScreen() {
     val showConfirmUbuntu = remember { mutableStateOf(false) }
     val showConfirmAndroid = remember { mutableStateOf(false) }
 
-    val navItems = remember {
-        listOf(
-            NavigationItem("Switcher", MiuixIcons.Useful.NavigatorSwitch),
-            NavigationItem("About", MiuixIcons.Useful.Info)
-        )
-    }
-
     fun appendLog(msg: String) {
         consoleLog = (consoleLog + "\n" + msg).trim()
     }
@@ -363,48 +366,59 @@ fun MainAppScreen() {
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                if (selectedTab == 0) {
+                    TopAppBar(
+                        title = "Tanzanite OS Switcher",
+                        largeTitle = "Tanzanite Dual-Boot",
+                        scrollBehavior = switcherScrollBehavior
+                    )
+                } else {
+                    TopAppBar(
+                        title = "About",
+                        largeTitle = "About",
+                        scrollBehavior = aboutScrollBehavior
+                    )
+                }
+            }
+        ) { innerPadding ->
+            val layoutDirection = LocalLayoutDirection.current
+            val contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding(),
+                bottom = innerPadding.calculateBottomPadding() + 96.dp,
+                start = innerPadding.calculateStartPadding(layoutDirection),
+                end = innerPadding.calculateEndPadding(layoutDirection)
+            )
             if (selectedTab == 0) {
-                TopAppBar(
-                    title = "Tanzanite OS Switcher",
-                    largeTitle = "Tanzanite Dual-Boot",
-                    scrollBehavior = switcherScrollBehavior
+                SwitcherContent(
+                    innerPadding = contentPadding,
+                    status = status,
+                    isBusy = isBusy,
+                    consoleLog = consoleLog,
+                    onRefresh = { refreshStatus() },
+                    onBackupStock = { backupCurrentStock() },
+                    onRequestUbuntu = { showConfirmUbuntu.value = true },
+                    onRequestRestore = { showConfirmAndroid.value = true }
                 )
             } else {
-                TopAppBar(
-                    title = "About",
-                    largeTitle = "About",
-                    scrollBehavior = aboutScrollBehavior
+                AboutContent(
+                    innerPadding = contentPadding,
+                    status = status
                 )
             }
-        },
-        bottomBar = {
-            NavigationBar(
-                items = navItems,
-                selected = selectedTab,
-                onClick = { selectedTab = it }
-            )
         }
-    ) { innerPadding ->
-        if (selectedTab == 0) {
-            SwitcherContent(
-                innerPadding = innerPadding,
-                status = status,
-                isBusy = isBusy,
-                consoleLog = consoleLog,
-                onRefresh = { refreshStatus() },
-                onBackupStock = { backupCurrentStock() },
-                onRequestUbuntu = { showConfirmUbuntu.value = true },
-                onRequestRestore = { showConfirmAndroid.value = true }
-            )
-        } else {
-            AboutContent(
-                innerPadding = innerPadding,
-                status = status
-            )
-        }
+
+        LiquidGlassFloatingBar(
+            selectedTab = selectedTab,
+            onTabSelected = { selectedTab = it },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
+        )
     }
 
     SuperDialog(
@@ -464,6 +478,51 @@ fun MainAppScreen() {
             }
         }
     }
+}
+
+@Composable
+fun LiquidGlassFloatingBar(
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val switchDrawable = remember(context) { ContextCompat.getDrawable(context, R.drawable.ic_nav_switch) }
+    val infoDrawable = remember(context) { ContextCompat.getDrawable(context, R.drawable.ic_nav_info) }
+
+    AndroidView(
+        modifier = modifier
+            .width(260.dp)
+            .wrapContentHeight(),
+        factory = { ctx ->
+            LiquidGlassTabBar(ctx).apply {
+                enableDynamicBackground = true
+                enableAdaptiveTint = true
+                cornerRadius = 999f
+                selectedTintColor = 0xFF0A84FF.toInt()
+
+                val activity = ctx as? ComponentActivity
+                val root = activity?.findViewById<View>(android.R.id.content) ?: rootView
+                backdropSource = root
+
+                setTabs(
+                    listOf(
+                        LiquidGlassTabBar.TabItem("Switcher", switchDrawable),
+                        LiquidGlassTabBar.TabItem("About", infoDrawable)
+                    )
+                )
+                this.selectedIndex = selectedTab
+                this.onTabSelected = { index ->
+                    onTabSelected(index)
+                }
+            }
+        },
+        update = { view ->
+            if (view.selectedIndex != selectedTab) {
+                view.selectedIndex = selectedTab
+            }
+        }
+    )
 }
 
 @Composable

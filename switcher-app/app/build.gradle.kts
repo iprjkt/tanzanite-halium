@@ -41,6 +41,7 @@ android {
 }
 
 dependencies {
+    implementation("com.github.QWEA0:liquidglass:v2.0.11")
     implementation("top.yukonga.miuix.kmp:miuix-android:0.3.8")
     implementation("androidx.compose.foundation:foundation:1.7.8")
     implementation("androidx.compose.ui:ui:1.7.8")
