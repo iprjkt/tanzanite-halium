@@ -209,6 +209,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+
         val rootLayout = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -448,16 +454,9 @@ fun MainAppScreen(selectedTab: Int) {
             }
         }
     ) { innerPadding ->
-        val layoutDirection = LocalLayoutDirection.current
-        val contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding(),
-            bottom = innerPadding.calculateBottomPadding() + 96.dp,
-            start = innerPadding.calculateStartPadding(layoutDirection),
-            end = innerPadding.calculateEndPadding(layoutDirection)
-        )
         if (selectedTab == 0) {
             SwitcherContent(
-                innerPadding = contentPadding,
+                innerPadding = innerPadding,
                 status = status,
                 isBusy = isBusy,
                 consoleLog = consoleLog,
@@ -468,7 +467,7 @@ fun MainAppScreen(selectedTab: Int) {
             )
         } else {
             AboutContent(
-                innerPadding = contentPadding,
+                innerPadding = innerPadding,
                 status = status
             )
         }
@@ -544,11 +543,15 @@ fun SwitcherContent(
     onRequestUbuntu: () -> Unit,
     onRequestRestore: () -> Unit
 ) {
+    val layoutDirection = LocalLayoutDirection.current
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding),
-        contentPadding = PaddingValues(bottom = 32.dp)
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            top = innerPadding.calculateTopPadding() + 8.dp,
+            bottom = 140.dp,
+            start = innerPadding.calculateStartPadding(layoutDirection),
+            end = innerPadding.calculateEndPadding(layoutDirection)
+        )
     ) {
         item {
             SmallTitle(text = "DEVICE & PARTITION STATUS")
@@ -690,11 +693,15 @@ fun AboutContent(
         } catch (_: Exception) {}
     }
 
+    val layoutDirection = LocalLayoutDirection.current
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding),
-        contentPadding = PaddingValues(bottom = 32.dp)
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            top = innerPadding.calculateTopPadding() + 8.dp,
+            bottom = 140.dp,
+            start = innerPadding.calculateStartPadding(layoutDirection),
+            end = innerPadding.calculateEndPadding(layoutDirection)
+        )
     ) {
         // Top Header matching HyperCeiler layout with App Icon
         item {
