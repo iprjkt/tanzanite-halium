@@ -12,9 +12,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.LocalOverscrollConfiguration
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +36,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -47,6 +51,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -83,6 +88,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils
+import top.yukonga.miuix.kmp.utils.overScrollVertical
 
 data class SystemStatus(
     val hasRoot: Boolean = false,
@@ -506,65 +512,60 @@ fun MainAppScreen(
         }
     }
 
-    HorizontalPager(
-        state = pagerState,
-        modifier = Modifier.fillMaxSize()
-    ) { page ->
-        if (page == 0) {
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                topBar = {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MiuixTheme.colorScheme.surface)
-                    ) {
+    @OptIn(ExperimentalFoundationApi::class)
+    CompositionLocalProvider(
+        LocalOverscrollFactory provides null,
+        @Suppress("DEPRECATION")
+        LocalOverscrollConfiguration provides null
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            if (page == 0) {
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
                         TopAppBar(
                             title = "Tanzanite OS Switcher",
                             largeTitle = "Tanzanite Dual-Boot",
                             scrollBehavior = switcherScrollBehavior
                         )
                     }
-                }
-            ) { innerPadding ->
-                SwitcherContent(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .nestedScroll(switcherScrollBehavior.nestedScrollConnection),
-                    innerPadding = innerPadding,
-                    status = status,
-                    isBusy = isBusy,
-                    consoleLog = consoleLog,
-                    onRefresh = { refreshStatus() },
-                    onBackupStock = { backupCurrentStock() },
-                    onRequestUbuntu = { showConfirmUbuntu.value = true },
-                    onRequestRestore = { showConfirmAndroid.value = true }
-                )
-            }
-        } else {
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                topBar = {
-                    Box(
+                ) { innerPadding ->
+                    SwitcherContent(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MiuixTheme.colorScheme.surface)
-                    ) {
+                            .fillMaxSize()
+                            .nestedScroll(switcherScrollBehavior.nestedScrollConnection),
+                        innerPadding = innerPadding,
+                        status = status,
+                        isBusy = isBusy,
+                        consoleLog = consoleLog,
+                        onRefresh = { refreshStatus() },
+                        onBackupStock = { backupCurrentStock() },
+                        onRequestUbuntu = { showConfirmUbuntu.value = true },
+                        onRequestRestore = { showConfirmAndroid.value = true }
+                    )
+                }
+            } else {
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
                         TopAppBar(
                             title = "About",
                             largeTitle = "About",
                             scrollBehavior = aboutScrollBehavior
                         )
                     }
+                ) { innerPadding ->
+                    AboutContent(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(aboutScrollBehavior.nestedScrollConnection),
+                        innerPadding = innerPadding,
+                        status = status
+                    )
                 }
-            ) { innerPadding ->
-                AboutContent(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .nestedScroll(aboutScrollBehavior.nestedScrollConnection),
-                    innerPadding = innerPadding,
-                    status = status
-                )
             }
         }
     }
@@ -649,10 +650,18 @@ fun SwitcherContent(
     onRequestRestore: () -> Unit
 ) {
     val layoutDirection = LocalLayoutDirection.current
+    val currentTop = innerPadding.calculateTopPadding()
+    val orientation = LocalConfiguration.current.orientation
+    var stableTopPadding by remember(orientation) { mutableStateOf(currentTop) }
+    if (currentTop > stableTopPadding) {
+        stableTopPadding = currentTop
+    }
+    val topPadding = if (stableTopPadding > 0.dp) stableTopPadding else currentTop
+
     LazyColumn(
-        modifier = modifier,
+        modifier = modifier.overScrollVertical(),
         contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding() + 8.dp,
+            top = topPadding + 8.dp,
             bottom = 140.dp,
             start = innerPadding.calculateStartPadding(layoutDirection),
             end = innerPadding.calculateEndPadding(layoutDirection)
@@ -800,10 +809,18 @@ fun AboutContent(
     }
 
     val layoutDirection = LocalLayoutDirection.current
+    val currentTop = innerPadding.calculateTopPadding()
+    val orientation = LocalConfiguration.current.orientation
+    var stableTopPadding by remember(orientation) { mutableStateOf(currentTop) }
+    if (currentTop > stableTopPadding) {
+        stableTopPadding = currentTop
+    }
+    val topPadding = if (stableTopPadding > 0.dp) stableTopPadding else currentTop
+
     LazyColumn(
-        modifier = modifier,
+        modifier = modifier.overScrollVertical(),
         contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding() + 8.dp,
+            top = topPadding + 8.dp,
             bottom = 140.dp,
             start = innerPadding.calculateStartPadding(layoutDirection),
             end = innerPadding.calculateEndPadding(layoutDirection)
