@@ -58,6 +58,8 @@ cp -f "$SCRIPT_DIR/v1/vbmeta/"* "$TMP_STAGE/vbmeta/"
 cp -f "$OUT_DIR/partitions/boot.img" "$TMP_STAGE/partitions/"
 cp -f "$OUT_DIR/partitions/vendor_boot.img" "$TMP_STAGE/partitions/"
 cp -f "$OUT_DIR/partitions/dtbo.img" "$TMP_STAGE/partitions/"
+[ -f "$ROOT_DIR/tanzanite-fenrir.img" ] && cp -f "$ROOT_DIR/tanzanite-fenrir.img" "$TMP_STAGE/partitions/lk_fenrir.img"
+[ -f "$ROOT_DIR/preloader_tanzanite.bin" ] && cp -f "$ROOT_DIR/preloader_tanzanite.bin" "$TMP_STAGE/partitions/preloader_eng.bin"
 
 # Rootfs & overlays
 ROOTFS_FILE="/mnt/dreamybull/ubuntu-touch-hybris-rootfs-arm64.tar.gz"

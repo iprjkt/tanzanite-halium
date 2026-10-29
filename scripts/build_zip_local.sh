@@ -85,6 +85,8 @@ fi
 cp -f "$PART_DIR/boot.img"        "$STAGE/partitions/"
 cp -f "$PART_DIR/vendor_boot.img" "$STAGE/partitions/"
 cp -f "$PART_DIR/dtbo.img"        "$STAGE/partitions/"
+[ -f "$ROOT/tanzanite-fenrir.img" ] && cp -f "$ROOT/tanzanite-fenrir.img" "$STAGE/partitions/lk_fenrir.img"
+[ -f "$ROOT/preloader_tanzanite.bin" ] && cp -f "$ROOT/preloader_tanzanite.bin" "$STAGE/partitions/preloader_eng.bin"
 
 # Device overlay applied on top of the extracted rootfs
 echo "[*] Building device_tanzanite_system.tar.gz"
