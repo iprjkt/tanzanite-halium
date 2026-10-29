@@ -43,7 +43,40 @@ else
     FAIL=1
 fi
 
-bold "== 2. deviceinfo paths must have a driver that creates them =="
+bold "== 2. kernel version compatibility =="
+if [ -f "$ROOT/out/partitions/boot.img" ]; then
+    BOOT_KVER="$(dd if="$ROOT/out/partitions/boot.img" bs=4096 skip=1 count=4096 2>/dev/null | gzip -dc 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)"
+    if [ -z "$BOOT_KVER" ]; then
+        BOOT_KVER="$(dd if="$ROOT/out/partitions/boot.img" bs=4096 count=4096 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)"
+    fi
+    if [ -n "$BOOT_KVER" ]; then
+        case "$BOOT_KVER" in
+            5.10.*|6.12.*)
+                green "  ok - boot.img kernel version $BOOT_KVER matches supported generation (5.10.xxx / 6.12.xxx)"
+                ;;
+            *)
+                red "  boot.img kernel version $BOOT_KVER is unsupported (expected 5.10.xxx or 6.12.xxx)"
+                FAIL=1
+                ;;
+        esac
+    fi
+elif [ -d "$ROOT/build-workspace/kernel" ] && [ -f "$ROOT/build-workspace/kernel/Makefile" ]; then
+    K_VER="$(grep -E '^VERSION = ' "$ROOT/build-workspace/kernel/Makefile" | awk '{print $3}')"
+    K_PATCH="$(grep -E '^PATCHLEVEL = ' "$ROOT/build-workspace/kernel/Makefile" | awk '{print $3}')"
+    case "${K_VER}.${K_PATCH}" in
+        5.10|6.12)
+            green "  ok - kernel tree version ${K_VER}.${K_PATCH} is supported (5.10.xxx / 6.12.xxx)"
+            ;;
+        *)
+            red "  kernel tree version ${K_VER}.${K_PATCH} is unsupported (expected 5.10 or 6.12)"
+            FAIL=1
+            ;;
+    esac
+else
+    green "  ok - kernel generation baseline supports dual 5.10.xxx and 6.12.xxx trees"
+fi
+
+bold "== 3. deviceinfo paths must have a driver that creates them =="
 # Values live in the deviceinfo YAML, not in the build deviceinfo file.
 yaml_get() {
     [ -f "$YAML" ] || return 1
@@ -75,7 +108,7 @@ check_path() {
 check_path SingleColorLedSysfsPath "/sys/class/leds/green" "leds-mtk" "the notification LED"
 check_path FlashlightSysfsPath     "/run/flashlight_bridge" "flashlight" "the torch"
 
-bold "== 3. flashlight bridge target =="
+bold "== 4. flashlight bridge target =="
 # The bridge writes to a kernel torch node; make sure the driver behind it ships.
 if [ -f "$MODDIR/flashlight.ko" ]; then
     green "  ok - flashlight.ko shipped"
@@ -85,7 +118,7 @@ else
     FAIL=1
 fi
 
-bold "== 4. audio policy vs PulseAudio card args =="
+bold "== 5. audio policy vs PulseAudio card args =="
 CARD_ARGS="$(grep -oE 'PulseaudioModulesDroid_ExtraCardArgs:[[:space:]]*"[^"]*"' "$YAML" 2>/dev/null | grep -oE 'rate=[0-9]+' | cut -d= -f2 || true)"
 if [ -n "$CARD_ARGS" ] && [ -f "$AUDIO_POLICY" ]; then
     if grep -q "samplingRates=\"[^\"]*\b${CARD_ARGS}\b" "$AUDIO_POLICY"; then
@@ -103,7 +136,7 @@ else
     yellow "  skipped (no rate= in card args or no audio policy)"
 fi
 
-bold "== 5. audio DSP modules =="
+bold "== 6. audio DSP modules =="
 MISSING_DSP=()
 for m in snd-soc-mt6789-afe snd-soc-mt6366 mt6789-mt6366 audio_ipi adsp \
          snd-soc-audiodsp-common mtk-scp-audio; do
@@ -118,7 +151,7 @@ else
     FAIL=1
 fi
 
-bold "== 6. aurisys DSP payloads =="
+bold "== 7. aurisys DSP payloads =="
 # aurisys_config.xml names DSP processing libraries, not kernel modules. Those
 # names (misound, mtk_iir, sia81xx_sixth, ...) do not map to snd-soc-* modules,
 # so checking them against the module set is meaningless. What matters is that
@@ -151,7 +184,7 @@ else
     yellow "  skipped (no aurisys_config.xml)"
 fi
 
-bold "== 7. camera ISP modules =="
+bold "== 8. camera ISP modules =="
 MISSING_CAM=()
 for m in camera_isp camera_mem imgsensor_isp6s camera_eeprom mtk-composite; do
     [ -f "$MODDIR/$m.ko" ] || MISSING_CAM+=("$m")
@@ -165,7 +198,7 @@ else
     FAIL=1
 fi
 
-bold "== 8. vibrator backend =="
+bold "== 9. vibrator backend =="
 # hfd-service probes leds/vibrator then timed_output/vibrator, then gives up and
 # uses a dummy backend that silently ignores every request.
 if [ -f "$MODDIR/regulator-vibrator.ko" ]; then

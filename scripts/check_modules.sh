@@ -111,6 +111,32 @@ check_group "camera autofocus" \
 check_group "sensors" \
     sensorhub
 
+bold "== 6. kernel vermagic and version compatibility =="
+if command -v modinfo >/dev/null 2>&1; then
+    VERMAGICS="$(find "$MODDIR" -maxdepth 1 -name '*.ko' -exec modinfo {} + 2>/dev/null | grep vermagic | awk '{print $2}' | sort -u)"
+    if [ -n "$VERMAGICS" ]; then
+        while IFS= read -r vm; do
+            [ -n "$vm" ] || continue
+            case "$vm" in
+                5.10.*)
+                    green "  ok - module vermagic $vm is a supported 5.10.xxx kernel generation"
+                    ;;
+                6.12.*)
+                    green "  ok - module vermagic $vm is a supported 6.12.xxx kernel generation"
+                    ;;
+                *)
+                    red "  module vermagic $vm is NOT supported (expected 5.10.xxx or 6.12.xxx)"
+                    FAIL=1
+                    ;;
+            esac
+        done <<< "$VERMAGICS"
+    else
+        yellow "  skipped - no vermagic strings found in module binaries"
+    fi
+else
+    yellow "  skipped - modinfo not installed on host"
+fi
+
 echo
 if [ "$FAIL" -eq 1 ]; then
     bold "RESULT: inconsistencies found"

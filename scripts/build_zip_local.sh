@@ -81,6 +81,31 @@ else
     exit 1
 fi
 
+# Verify and validate kernel version from boot.img (supports 5.10.xxx and 6.12.xxx)
+echo "[*] Validating kernel version in $PART_DIR/boot.img..."
+DETECTED_KERNEL_VER="$(dd if="$PART_DIR/boot.img" bs=4096 skip=1 count=4096 2>/dev/null | gzip -dc 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)"
+if [ -z "$DETECTED_KERNEL_VER" ]; then
+    DETECTED_KERNEL_VER="$(dd if="$PART_DIR/boot.img" bs=4096 count=4096 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)"
+fi
+
+if [ -z "$DETECTED_KERNEL_VER" ]; then
+    echo "[-] Error: Failed to extract kernel version from $PART_DIR/boot.img" >&2
+    exit 1
+fi
+
+case "$DETECTED_KERNEL_VER" in
+    5.10.*)
+        echo "    [+] Validated kernel version: $DETECTED_KERNEL_VER (5.10.xxx generation)"
+        ;;
+    6.12.*)
+        echo "    [+] Validated kernel version: $DETECTED_KERNEL_VER (6.12.xxx generation)"
+        ;;
+    *)
+        echo "[-] Error: Unsupported kernel version: $DETECTED_KERNEL_VER. Tanzanite requires 5.10.xxx or 6.12.xxx!" >&2
+        exit 1
+        ;;
+esac
+
 # Halium boot images built from our kernel
 cp -f "$PART_DIR/boot.img"        "$STAGE/partitions/"
 cp -f "$PART_DIR/vendor_boot.img" "$STAGE/partitions/"
@@ -109,7 +134,7 @@ tanzanite.build.ut_release=${UT_RELEASE}
 tanzanite.build.halium=${HALIUM_VERSION}
 tanzanite.build.date=${BUILD_STAMP}
 tanzanite.build.commit=${GIT_SHORT}${GIT_DIRTY}
-tanzanite.build.kernel=5.10.269-EvernightKernel-1.1
+tanzanite.build.kernel=${DETECTED_KERNEL_VER}
 tanzanite.build.modules=385
 tanzanite.build.installer=${ZIP_NAME}
 MANIFEST
@@ -136,7 +161,7 @@ halium        $HALIUM_VERSION
 device        $DEVICE_CODENAME
 commit        $GIT_SHORT$GIT_DIRTY
 built         $BUILD_STAMP
-kernel        5.10.269-EvernightKernel-1.1
+kernel        ${DETECTED_KERNEL_VER}
 modules       385
 INFO
 

@@ -34,7 +34,7 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 | **Architecture** | `arm64-v8a` (64-bit) |
 | **Halium Version** | `12` |
 | **Target OS** | Ubuntu Touch Focal (20.04 LTS) |
-| **Kernel Source** | [iprjkt/evernight-gki](https://github.com/iprjkt/evernight-gki) (GKI Linux 5.10) |
+| **Kernel Source** | [iprjkt/evernight-gki](https://github.com/iprjkt/evernight-gki) (GKI Linux 5.10 / 6.12 dual-generation) |
 | **Dual-Boot Mode** | Slot A partition swap with stock HyperOS fallback on Slot B |
 
 ---
@@ -74,8 +74,10 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 
 3. **Flashable Recovery Installer**:
    - Standalone TWRP/recovery flashable zip (`tanzanite-halium.zip`) with dynamic A/B slot detection.
+   - Dual-generation kernel validation enforcing compatibility with Linux 5.10.xxx and 6.12.xxx trees.
    - Automatic vendor fstab patching for unencrypted ext4 userdata.
    - Full AVB verification handling (`vbmeta`, `vbmeta_system`, `vbmeta_vendor`).
+   - Integrated bootloader security flashing (LK Fenrir and Preloader Engineering) with interactive skip detection.
    - Terminal status display with creator and support links.
 
 4. **Rootfs & Subdir Dual-Boot**:

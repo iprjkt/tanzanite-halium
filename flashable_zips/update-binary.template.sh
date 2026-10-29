@@ -88,6 +88,36 @@ find_preloader_part() {
   fi
 }
 
+extract_kernel_ver() {
+  local target="$1"
+  local ver=""
+  local decomp=""
+
+  if [ -x "$BB" ]; then
+    decomp="$BB zcat"
+  elif command -v zcat >/dev/null 2>&1; then
+    decomp="zcat"
+  else
+    decomp="gzip -dc"
+  fi
+
+  # 1. Decompressed gzip stream (Android boot v4 kernel at offset 4096)
+  ver=$(dd if="$target" bs=4096 skip=1 count=4096 2>/dev/null | $decomp 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)
+  if [ -n "$ver" ]; then
+    echo "$ver"
+    return 0
+  fi
+
+  # 2. Raw uncompressed image check
+  ver=$(dd if="$target" bs=4096 count=4096 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)
+  if [ -n "$ver" ]; then
+    echo "$ver"
+    return 0
+  fi
+
+  return 1
+}
+
 # 1. Detect Active Slot Dynamically
 SLOT=$(getprop ro.boot.slot_suffix 2>/dev/null || true)
 if [ -z "$SLOT" ]; then
@@ -398,6 +428,47 @@ for p in boot vendor_boot dtbo; do
   [ -s "$WORK/partitions/${p}.img" ] || abort "Extracted Halium $p.img is missing or empty!"
   [ -e "/dev/block/by-name/${p}${SLOT}" ] || abort "Target partition /dev/block/by-name/${p}${SLOT} not found!"
 done
+
+# Tanzanite Kernel Version Validation (supports 5.10.xxx and 6.12.xxx kernel trees)
+ui_print "=============================================="
+ui_print " Tanzanite Kernel Version Validation "
+ui_print "=============================================="
+HALIUM_KERNEL_VER=$(extract_kernel_ver "$WORK/partitions/boot.img" || true)
+if [ -n "$HALIUM_KERNEL_VER" ]; then
+  ui_print "[*] Target Halium kernel version: $HALIUM_KERNEL_VER"
+  case "$HALIUM_KERNEL_VER" in
+    5.10.*)
+      ui_print "    [+] Validated kernel version: 5.10.xxx (MT6789 GKI 5.10 generation)"
+      ;;
+    6.12.*)
+      ui_print "    [+] Validated kernel version: 6.12.xxx (MT6789 GKI 6.12 generation)"
+      ;;
+    *)
+      abort "Unsupported kernel version: $HALIUM_KERNEL_VER! Tanzanite requires 5.10.xxx or 6.12.xxx."
+      ;;
+  esac
+else
+  ui_print "[!] Notice: Unable to extract kernel banner from boot.img (continuing with installation)"
+fi
+
+ACTIVE_BOOT_PART="/dev/block/by-name/boot${SLOT}"
+if [ -e "$ACTIVE_BOOT_PART" ]; then
+  ACTIVE_KERNEL_VER=$(extract_kernel_ver "$ACTIVE_BOOT_PART" || true)
+  if [ -n "$ACTIVE_KERNEL_VER" ]; then
+    ui_print "[*] Current slot ($SLOT) active kernel: $ACTIVE_KERNEL_VER"
+    case "$ACTIVE_KERNEL_VER" in
+      5.10.*)
+        ui_print "    [+] Current active kernel base: 5.10.xxx"
+        ;;
+      6.12.*)
+        ui_print "    [+] Current active kernel base: 6.12.xxx"
+        ;;
+      *)
+        ui_print "    [*] Current active kernel base: $ACTIVE_KERNEL_VER"
+        ;;
+    esac
+  fi
+fi
 
 # Flash LK Fenrir and Preloader Engineering to BOTH slots (with smart hash verification & skip confirmation)
 LK_IMG="$WORK/partitions/lk_fenrir.img"

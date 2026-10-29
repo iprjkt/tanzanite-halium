@@ -55,6 +55,33 @@ chmod 755 "$TMP_STAGE/tools/"*
 cp -f "$SCRIPT_DIR/v1/vbmeta/"* "$TMP_STAGE/vbmeta/"
 
 # Partitions
+[ -f "$OUT_DIR/partitions/boot.img" ] || { echo "[-] Error: $OUT_DIR/partitions/boot.img missing!"; exit 1; }
+
+# Validate kernel version (supports 5.10.xxx and 6.12.xxx)
+echo "[*] Validating kernel version in $OUT_DIR/partitions/boot.img..."
+DETECTED_KERNEL_VER="$(dd if="$OUT_DIR/partitions/boot.img" bs=4096 skip=1 count=4096 2>/dev/null | gzip -dc 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)"
+if [ -z "$DETECTED_KERNEL_VER" ]; then
+    DETECTED_KERNEL_VER="$(dd if="$OUT_DIR/partitions/boot.img" bs=4096 count=4096 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)"
+fi
+
+if [ -z "$DETECTED_KERNEL_VER" ]; then
+    echo "[-] Error: Could not parse kernel version from $OUT_DIR/partitions/boot.img" >&2
+    exit 1
+fi
+
+case "$DETECTED_KERNEL_VER" in
+    5.10.*)
+        echo "    [+] Validated kernel version: $DETECTED_KERNEL_VER (5.10.xxx generation)"
+        ;;
+    6.12.*)
+        echo "    [+] Validated kernel version: $DETECTED_KERNEL_VER (6.12.xxx generation)"
+        ;;
+    *)
+        echo "[-] Error: Unsupported kernel version: $DETECTED_KERNEL_VER. Tanzanite requires 5.10.xxx or 6.12.xxx!" >&2
+        exit 1
+        ;;
+esac
+
 cp -f "$OUT_DIR/partitions/boot.img" "$TMP_STAGE/partitions/"
 cp -f "$OUT_DIR/partitions/vendor_boot.img" "$TMP_STAGE/partitions/"
 cp -f "$OUT_DIR/partitions/dtbo.img" "$TMP_STAGE/partitions/"

@@ -67,6 +67,24 @@ else
         git clone --depth=1 --single-branch --branch "$KERNEL_BRANCH" "$KERNEL_REPO" "$KERNEL_SRC"
     fi
 
+    step "Validating kernel version"
+    [ -f "$KERNEL_SRC/Makefile" ] || die "Missing $KERNEL_SRC/Makefile"
+    K_VER="$(grep -E '^VERSION = ' "$KERNEL_SRC/Makefile" | awk '{print $3}')"
+    K_PATCH="$(grep -E '^PATCHLEVEL = ' "$KERNEL_SRC/Makefile" | awk '{print $3}')"
+    K_SUB="$(grep -E '^SUBLEVEL = ' "$KERNEL_SRC/Makefile" | awk '{print $3}')"
+    K_FULL="${K_VER}.${K_PATCH}.${K_SUB}"
+    case "${K_VER}.${K_PATCH}" in
+        5.10)
+            echo "    ok - kernel version $K_FULL matches supported 5.10.xxx generation"
+            ;;
+        6.12)
+            echo "    ok - kernel version $K_FULL matches supported 6.12.xxx generation"
+            ;;
+        *)
+            die "Unsupported kernel version: $K_FULL in $KERNEL_SRC (expected 5.10.xxx or 6.12.xxx for tanzanite)"
+            ;;
+    esac
+
     step "Configuring kernel ($DEFCONFIG)"
     make -C "$KERNEL_SRC" O=out "${KERNEL_LLVM_ARGS[@]}" "$DEFCONFIG"
 
