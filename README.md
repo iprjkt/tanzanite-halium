@@ -47,13 +47,14 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 | **Lomiri UI / Compositor** | Working | Native Wayland via `lomiri-system-compositor` |
 | **GPU Acceleration** | Working | Mali-G57 MC2 via libhybris / Android 12 Gralloc & EGL |
 | **Battery & Power Management** | Working | Accurate fuelgauge reporting via UPower BMS filter shim |
-| **Audio (Speaker / Playback)** | Working | PulseAudio with Droid HAL 30 & clean Aurisys routing |
+| **Audio (Speaker / Playback)** | Working | Pinned 48kHz native rate, SiA81xx smartPA & full Aurisys DSP libraries |
 | **Audio (Microphone / Input)** | Working | Primary mic routed through Droid source |
-| **Flashlight / Torch** | Not Working | WIP |
+| **Haptics / Vibration** | Working | `regulator-vibrator` via timed_output udev rule |
+| **Flashlight / Torch** | Working | `tanzanite-flashlight-bridge` daemon + MTK flashlight drivers |
 | **Screen Rotation / Sensors** | Working | Accelerometer & Orientation via HIDL 2.0 sensorfw |
 | **Cellular / 4G LTE Data** | Working | Dual SIM slots detected via ofono-sailfish & MTK IRadio@1.2 |
 | **WiFi & Bluetooth** | Working | Managed by ConnMan & Bluez / Bluebinder |
-| **Camera** | In Progress | Halium 12 camera metadata service binding in progress |
+| **Camera** | In Progress | ISP & AF kernel modules restored; Halium 12 HAL binding in progress |
 
 ---
 
@@ -107,11 +108,21 @@ Ringkasan alur instalasi:
 - [`flashable_zips/`](file:///home/fxxyz73/tanzanite-halium/flashable_zips): Template scripts and binaries for the recovery installer.
 - [`overlay/`](file:///home/fxxyz73/tanzanite-halium/overlay): Ubuntu Touch rootfs overlay files (drivers, audio, graphics, udev rules).
 - [`ramdisk-overlay/`](file:///home/fxxyz73/tanzanite-halium/ramdisk-overlay): Boot ramdisk modifications.
-- [`vendor-ramdisk-overlay/`](file:///home/fxxyz73/tanzanite-halium/vendor-ramdisk-overlay): Prebuilt MediaTek vendor kernel modules.
+- [`vendor-ramdisk-overlay/`](file:///home/fxxyz73/tanzanite-halium/vendor-ramdisk-overlay): Prebuilt MediaTek vendor kernel modules (385 modules including `vendor_dlkm`).
+- [`scripts/`](file:///home/fxxyz73/tanzanite-halium/scripts): Tooling and hardware consistency checkers (`check_modules.sh`, `check_device_config.sh`, etc.).
 - [`docs/`](file:///home/fxxyz73/tanzanite-halium/docs): Technical documentation and troubleshooting guides:
+  - [`BOOTLOADER_AVB_LK.md`](file:///home/fxxyz73/tanzanite-halium/docs/BOOTLOADER_AVB_LK.md): Analisis teknis bootloader MT6789 dan alasan `tanzanite-halium` mempertahankan chain Preloader Eng + LK Fenrir.
+  - [`MODULE_AUDIT.md`](file:///home/fxxyz73/tanzanite-halium/docs/MODULE_AUDIT.md): Audit modul kernel vendor, GKI vendor_dlkm, dan subsistem audio/kamera/torch.
   - [`FLASHING_GUIDE_id.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_id.md): Panduan lengkap flashing dan instalasi dual-boot (Bahasa Indonesia).
   - [`FLASHING_GUIDE_en.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_en.md): Step-by-step flashing and dual-boot installation guide (English).
   - [`TROUBLESHOOTING_SDCARD_APT.md`](file:///home/fxxyz73/tanzanite-halium/docs/TROUBLESHOOTING_SDCARD_APT.md): Technical analysis for HyperOS storage permissions and Ubuntu Touch `apt` sandbox.
+
+---
+
+## Attribution & Credits
+
+- Port maintainer and dual-boot ecosystem: [iprjkt](https://github.com/iprjkt)
+- Audio DSP configuration, 48kHz policy pinning, vendor_dlkm module auditing, and hardware validation scripts adapted from work by [itswill00](https://github.com/itswill00/tanzanite-ubuntu-touch), used under the Apache-2.0 license.
 
 ---
 
