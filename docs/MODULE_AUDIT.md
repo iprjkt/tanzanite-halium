@@ -46,7 +46,7 @@ in stock but not here     : none
 here but not in stock     : none
 ```
 
-The sets were **identical**. The modules were not missing from `vendor_boot` — they were never in
+The sets were **identical**. The modules were not missing from `vendor_boot`: they were never in
 `vendor_boot` at all. This is correct behaviour for a GKI device: `vendor_boot` carries only the
 modules needed to bring up storage and display so the rootfs can mount, and everything else lives
 on the `vendor_dlkm` partition.
@@ -98,7 +98,7 @@ is 385 modules and `modules.load` is regenerated to match.
 `regulator-vibrator.ko` was already shipped and already loaded. `hfd-service` probes, in order:
 binder AIDL, binder HIDL, `/sys/class/leds/vibrator`, `/sys/class/timed_output/vibrator`,
 force-feedback input, and finally `VibratorDummy`. On MT6789 the driver registers a `timed_output`
-device, so `VibratorLegacy` is the backend that applies — and `usable()` calls `access()`, which
+device, so `VibratorLegacy` is the backend that applies, and `usable()` calls `access()`, which
 fails without a udev rule granting the desktop user write permission. hfd-service then fell through
 to `VibratorDummy`, which silently ignores every request. Fixed by the udev rules in
 `70-tanzanite.rules`.
@@ -152,7 +152,7 @@ the same way with `fsck.erofs`.
 
 ## Still requires a device
 
-The fixes are verified structurally — the modules are present, loadable per `modules.load`, and
+The fixes are verified structurally: the modules are present, loadable per `modules.load`, and
 every path the audio config references exists. What cannot be verified without hardware is that the
 drivers actually bind and the features work end to end. Specifically worth checking after flashing:
 

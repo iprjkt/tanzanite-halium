@@ -86,18 +86,18 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 
 ## Installation and Flashing Guide
 
-Panduan instalasi dual-boot tersedia dalam dua bahasa:
+Detailed step-by-step flashing guides are available in the documentation:
+- [English Flashing Guide](docs/FLASHING_GUIDE_en.md)
 - [Panduan Flashing (Bahasa Indonesia)](docs/FLASHING_GUIDE_id.md)
-- [Flashing Guide (English)](docs/FLASHING_GUIDE_en.md)
 
-Ringkasan alur instalasi:
-1. **Format Data ke ext4**: Format data ke filesystem `ext4` tanpa enkripsi lewat menu recovery atau flash `Format-Data-Ext4-Tanzanite.zip`, lalu reboot ke recovery.
-2. **Set Active Slot ke Slot A**: Pastikan recovery berada di Slot A.
-3. **Flash `tanzanite-halium.zip`**: Pasang zip melalui recovery untuk mem-patch vendor, disable AVB, mengekstrak rootfs ke `/data/ubuntu`, dan memasang kernel Halium.
-4. **Reboot System**: Masuk ke antarmuka Ubuntu Touch Focal.
+Installation workflow overview:
+1. **Format Userdata to ext4**: Format the `/data` partition to unencrypted `ext4` via the recovery menu or by flashing `Format-Data-Ext4-Tanzanite.zip`, then reboot recovery.
+2. **Set Active Slot to Slot A**: Verify that the recovery is active on Slot A.
+3. **Flash `tanzanite-halium.zip`**: Install the zip through recovery to patch vendor fstab, disable AVB, extract the Ubuntu Touch rootfs to `/data/ubuntu`, and install the Halium kernel.
+4. **Reboot System**: Boot into the Ubuntu Touch Focal user interface.
 5. **Dual-Boot Switching**:
-   - Dari Ubuntu Touch ke Android: Jalankan perintah `sudo boot-to-android` di terminal.
-   - Dari Android ke Ubuntu Touch: Buka aplikasi **Tanzanite Switcher** lalu ketuk tombol *Switch to Ubuntu Touch*.
+   - From Ubuntu Touch to Android: Run `sudo boot-to-android` in the terminal.
+   - From Android to Ubuntu Touch: Open the **Tanzanite Switcher** app and tap *Switch to Ubuntu Touch*.
 
 ---
 
@@ -111,11 +111,11 @@ Ringkasan alur instalasi:
 - [`vendor-ramdisk-overlay/`](file:///home/fxxyz73/tanzanite-halium/vendor-ramdisk-overlay): Prebuilt MediaTek vendor kernel modules (385 modules including `vendor_dlkm`).
 - [`scripts/`](file:///home/fxxyz73/tanzanite-halium/scripts): Tooling and hardware consistency checkers (`check_modules.sh`, `check_device_config.sh`, etc.).
 - [`docs/`](file:///home/fxxyz73/tanzanite-halium/docs): Technical documentation and troubleshooting guides:
-  - [`BOOTLOADER_AVB_LK.md`](file:///home/fxxyz73/tanzanite-halium/docs/BOOTLOADER_AVB_LK.md): Analisis teknis bootloader MT6789 dan alasan `tanzanite-halium` mempertahankan chain Preloader Eng + LK Fenrir.
-  - [`MODULE_AUDIT.md`](file:///home/fxxyz73/tanzanite-halium/docs/MODULE_AUDIT.md): Audit modul kernel vendor, GKI vendor_dlkm, dan subsistem audio/kamera/torch.
-  - [`FLASHING_GUIDE_id.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_id.md): Panduan lengkap flashing dan instalasi dual-boot (Bahasa Indonesia).
-  - [`FLASHING_GUIDE_en.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_en.md): Step-by-step flashing and dual-boot installation guide (English).
-  - [`TROUBLESHOOTING_SDCARD_APT.md`](file:///home/fxxyz73/tanzanite-halium/docs/TROUBLESHOOTING_SDCARD_APT.md): Technical analysis for HyperOS storage permissions and Ubuntu Touch `apt` sandbox.
+  - [`BOOTLOADER_AVB_LK.md`](file:///home/fxxyz73/tanzanite-halium/docs/BOOTLOADER_AVB_LK.md): Technical analysis of MT6789 boot security and rationale for retaining Preloader Engineering and LK Fenrir.
+  - [`MODULE_AUDIT.md`](file:///home/fxxyz73/tanzanite-halium/docs/MODULE_AUDIT.md): Technical audit of vendor kernel modules, GKI `vendor_dlkm`, and peripheral subsystems.
+  - [`FLASHING_GUIDE_en.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_en.md): Complete flashing and dual-boot installation guide (English).
+  - [`FLASHING_GUIDE_id.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_id.md): Complete flashing and dual-boot installation guide (Bahasa Indonesia).
+  - [`TROUBLESHOOTING_SDCARD_APT.md`](file:///home/fxxyz73/tanzanite-halium/docs/TROUBLESHOOTING_SDCARD_APT.md): Resolution guide for HyperOS storage permissions and Ubuntu Touch `apt` sandbox.
 
 ---
 

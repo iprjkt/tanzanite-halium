@@ -2,10 +2,10 @@
 
 > Device: Redmi Note 14 4G (`tanzanite`, MediaTek Helio G99 MT6789), dual-boot HyperOS + Ubuntu Touch 20.04 (Halium 12).
 
-Please select your preferred language / Silakan pilih bahasa panduan:
+Select your preferred language:
 
-- [Bahasa Indonesia (FLASHING_GUIDE_id.md)](FLASHING_GUIDE_id.md): Panduan lengkap langkah demi langkah flashing, format ext4, dan instalasi dual-boot.
 - [English (FLASHING_GUIDE_en.md)](FLASHING_GUIDE_en.md): Step-by-step guide for unencrypted ext4 formatting, flashing, and dual-boot setup.
+- [Bahasa Indonesia (FLASHING_GUIDE_id.md)](FLASHING_GUIDE_id.md): Panduan lengkap langkah demi langkah flashing, format ext4, dan instalasi dual-boot.
 
 ---
 
