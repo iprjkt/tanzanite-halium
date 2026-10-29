@@ -34,7 +34,7 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 | **Architecture** | `arm64-v8a` (64-bit) |
 | **Halium Version** | `12` |
 | **Target OS** | Ubuntu Touch Focal (20.04 LTS) |
-| **Kernel Source** | [iprjkt/evernight-gki](https://github.com/iprjkt/evernight-gki) (GKI Linux 5.10 / 6.12 dual-generation) |
+| **Kernel Source** | [iprjkt/evernight-gki](https://github.com/iprjkt/evernight-gki) (GKI Linux 5.10 baseline) |
 | **Dual-Boot Mode** | Slot A partition swap with stock HyperOS fallback on Slot B |
 
 ---
@@ -74,11 +74,15 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 
 3. **Flashable Recovery Installer**:
    - Standalone TWRP/recovery flashable zip (`tanzanite-halium.zip`) with dynamic A/B slot detection.
-   - Dual-generation kernel validation enforcing compatibility with Linux 5.10.xxx and 6.12.xxx trees.
+   - Strict kernel baseline validation enforcing Linux 5.10.xxx (aborts on Linux 6.12.xxx to prevent device hardbrick).
    - Automatic vendor fstab patching for unencrypted ext4 userdata.
    - Full AVB verification handling (`vbmeta`, `vbmeta_system`, `vbmeta_vendor`).
    - Integrated bootloader security flashing (LK Fenrir and Preloader Engineering) with interactive skip detection.
    - Terminal status display with creator and support links.
+
+> [!CAUTION]
+> **Kernel Version Compatibility (Hardbrick Warning)**:
+> Tanzanite Halium ONLY supports the Linux 5.10.xxx kernel baseline. If your device is running newer firmware with Linux 6.12.xxx, flashing this port WILL permanently hardbrick the device due to incompatible preloader, LK Fenrir, and vendor hardware drivers. You must downgrade to Android 12-14 stock firmware (kernel 5.10.xxx) before flashing.
 
 4. **Rootfs & Subdir Dual-Boot**:
    - Boots Ubuntu Touch rootfs from `/data/ubuntu` on the userdata partition.

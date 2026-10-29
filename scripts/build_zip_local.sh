@@ -81,7 +81,8 @@ else
     exit 1
 fi
 
-# Verify and validate kernel version from boot.img (supports 5.10.xxx and 6.12.xxx)
+# Verify and validate kernel version from boot.img (STRICT: only 5.10.xxx is supported)
+# Flashing this build on a 6.12.xxx kernel baseline causes a permanent hardbrick!
 echo "[*] Validating kernel version in $PART_DIR/boot.img..."
 DETECTED_KERNEL_VER="$(dd if="$PART_DIR/boot.img" bs=4096 skip=1 count=4096 2>/dev/null | gzip -dc 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)"
 if [ -z "$DETECTED_KERNEL_VER" ]; then
@@ -95,13 +96,15 @@ fi
 
 case "$DETECTED_KERNEL_VER" in
     5.10.*)
-        echo "    [+] Validated kernel version: $DETECTED_KERNEL_VER (5.10.xxx generation)"
+        echo "    [+] Validated kernel version: $DETECTED_KERNEL_VER (5.10.xxx baseline)"
         ;;
     6.12.*)
-        echo "    [+] Validated kernel version: $DETECTED_KERNEL_VER (6.12.xxx generation)"
+        echo "[-] FATAL: Kernel $DETECTED_KERNEL_VER detected! Tanzanite Halium ONLY supports 5.10.xxx." >&2
+        echo "[-] Flashing a 6.12.xxx kernel will hardbrick the device." >&2
+        exit 1
         ;;
     *)
-        echo "[-] Error: Unsupported kernel version: $DETECTED_KERNEL_VER. Tanzanite requires 5.10.xxx or 6.12.xxx!" >&2
+        echo "[-] Error: Unsupported kernel version: $DETECTED_KERNEL_VER (only 5.10.xxx is supported)." >&2
         exit 1
         ;;
 esac

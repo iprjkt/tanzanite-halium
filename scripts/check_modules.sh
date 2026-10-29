@@ -119,13 +119,14 @@ if command -v modinfo >/dev/null 2>&1; then
             [ -n "$vm" ] || continue
             case "$vm" in
                 5.10.*)
-                    green "  ok - module vermagic $vm is a supported 5.10.xxx kernel generation"
+                    green "  ok - module vermagic $vm is a supported 5.10.xxx kernel baseline"
                     ;;
                 6.12.*)
-                    green "  ok - module vermagic $vm is a supported 6.12.xxx kernel generation"
+                    red "  FATAL: module vermagic $vm is 6.12.xxx! Kernel 6.12 causes a hardbrick on Tanzanite Halium."
+                    FAIL=1
                     ;;
                 *)
-                    red "  module vermagic $vm is NOT supported (expected 5.10.xxx or 6.12.xxx)"
+                    red "  module vermagic $vm is NOT supported (only 5.10.xxx is allowed)"
                     FAIL=1
                     ;;
             esac

@@ -51,11 +51,15 @@ if [ -f "$ROOT/out/partitions/boot.img" ]; then
     fi
     if [ -n "$BOOT_KVER" ]; then
         case "$BOOT_KVER" in
-            5.10.*|6.12.*)
-                green "  ok - boot.img kernel version $BOOT_KVER matches supported generation (5.10.xxx / 6.12.xxx)"
+            5.10.*)
+                green "  ok - boot.img kernel version $BOOT_KVER matches supported 5.10.xxx baseline"
+                ;;
+            6.12.*)
+                red "  FATAL: boot.img kernel version is $BOOT_KVER (6.12 causes a hardbrick on Tanzanite Halium!)"
+                FAIL=1
                 ;;
             *)
-                red "  boot.img kernel version $BOOT_KVER is unsupported (expected 5.10.xxx or 6.12.xxx)"
+                red "  boot.img kernel version $BOOT_KVER is unsupported (only 5.10.xxx is allowed)"
                 FAIL=1
                 ;;
         esac
@@ -64,16 +68,20 @@ elif [ -d "$ROOT/build-workspace/kernel" ] && [ -f "$ROOT/build-workspace/kernel
     K_VER="$(grep -E '^VERSION = ' "$ROOT/build-workspace/kernel/Makefile" | awk '{print $3}')"
     K_PATCH="$(grep -E '^PATCHLEVEL = ' "$ROOT/build-workspace/kernel/Makefile" | awk '{print $3}')"
     case "${K_VER}.${K_PATCH}" in
-        5.10|6.12)
-            green "  ok - kernel tree version ${K_VER}.${K_PATCH} is supported (5.10.xxx / 6.12.xxx)"
+        5.10)
+            green "  ok - kernel tree version ${K_VER}.${K_PATCH} matches supported 5.10.xxx baseline"
+            ;;
+        6.12)
+            red "  FATAL: kernel tree version is 6.12 (causes a hardbrick on Tanzanite Halium!)"
+            FAIL=1
             ;;
         *)
-            red "  kernel tree version ${K_VER}.${K_PATCH} is unsupported (expected 5.10 or 6.12)"
+            red "  kernel tree version ${K_VER}.${K_PATCH} is unsupported (only 5.10 is allowed)"
             FAIL=1
             ;;
     esac
 else
-    green "  ok - kernel generation baseline supports dual 5.10.xxx and 6.12.xxx trees"
+    green "  ok - kernel generation baseline strictly enforces 5.10.xxx"
 fi
 
 bold "== 3. deviceinfo paths must have a driver that creates them =="

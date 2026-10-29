@@ -429,45 +429,59 @@ for p in boot vendor_boot dtbo; do
   [ -e "/dev/block/by-name/${p}${SLOT}" ] || abort "Target partition /dev/block/by-name/${p}${SLOT} not found!"
 done
 
-# Tanzanite Kernel Version Validation (supports 5.10.xxx and 6.12.xxx kernel trees)
+# Tanzanite Kernel Safety & Version Validation (STRICT: Only Linux 5.10.xxx is supported)
+# Flashing this Halium build, LK Fenrir, or Preloader Eng on kernel 6.12.xxx firmware WILL HARDBRICK the device!
 ui_print "=============================================="
-ui_print " Tanzanite Kernel Version Validation "
+ui_print " Tanzanite Kernel Safety & Version Validation "
 ui_print "=============================================="
+
+# 1. Validate Target Halium Kernel in boot.img
 HALIUM_KERNEL_VER=$(extract_kernel_ver "$WORK/partitions/boot.img" || true)
 if [ -n "$HALIUM_KERNEL_VER" ]; then
   ui_print "[*] Target Halium kernel version: $HALIUM_KERNEL_VER"
   case "$HALIUM_KERNEL_VER" in
     5.10.*)
-      ui_print "    [+] Validated kernel version: 5.10.xxx (MT6789 GKI 5.10 generation)"
+      ui_print "    [+] Validated target kernel: 5.10.xxx (MT6789 GKI 5.10 baseline)"
       ;;
     6.12.*)
-      ui_print "    [+] Validated kernel version: 6.12.xxx (MT6789 GKI 6.12 generation)"
+      abort "HARDBRICK RISK: Target kernel is $HALIUM_KERNEL_VER! Tanzanite Halium ONLY supports 5.10.xxx. Kernel 6.12 is incompatible and causes a hardbrick!"
       ;;
     *)
-      abort "Unsupported kernel version: $HALIUM_KERNEL_VER! Tanzanite requires 5.10.xxx or 6.12.xxx."
+      abort "Unsupported target kernel: $HALIUM_KERNEL_VER! Only 5.10.xxx is supported."
       ;;
   esac
-else
-  ui_print "[!] Notice: Unable to extract kernel banner from boot.img (continuing with installation)"
 fi
 
+# 2. Validate Currently Installed Stock Firmware Kernel on Device
 ACTIVE_BOOT_PART="/dev/block/by-name/boot${SLOT}"
+ACTIVE_KERNEL_VER=""
 if [ -e "$ACTIVE_BOOT_PART" ]; then
   ACTIVE_KERNEL_VER=$(extract_kernel_ver "$ACTIVE_BOOT_PART" || true)
-  if [ -n "$ACTIVE_KERNEL_VER" ]; then
-    ui_print "[*] Current slot ($SLOT) active kernel: $ACTIVE_KERNEL_VER"
-    case "$ACTIVE_KERNEL_VER" in
-      5.10.*)
-        ui_print "    [+] Current active kernel base: 5.10.xxx"
-        ;;
-      6.12.*)
-        ui_print "    [+] Current active kernel base: 6.12.xxx"
-        ;;
-      *)
-        ui_print "    [*] Current active kernel base: $ACTIVE_KERNEL_VER"
-        ;;
-    esac
-  fi
+fi
+if [ -z "$ACTIVE_KERNEL_VER" ] && [ -r "/proc/version" ]; then
+  ACTIVE_KERNEL_VER=$(grep -oE 'Linux version [0-9]+\.[0-9]+\.[0-9]+[^ ]*' /proc/version | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)
+fi
+
+if [ -n "$ACTIVE_KERNEL_VER" ]; then
+  ui_print "[*] Detected device firmware kernel: $ACTIVE_KERNEL_VER"
+  case "$ACTIVE_KERNEL_VER" in
+    6.12.*)
+      ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      ui_print "[!] FATAL: DEVICE IS RUNNING LINUX KERNEL 6.12.xxx!"
+      ui_print "[!] Flashing this port onto a 6.12 baseline WILL HARDBRICK the device."
+      ui_print "[!] MediaTek preloader, LK Fenrir, and vendor blobs require kernel 5.10."
+      ui_print "[!] Please downgrade your stock firmware to Android 12-14 (Kernel 5.10) first!"
+      ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      abort "Installation aborted to prevent a permanent device hardbrick."
+      ;;
+    5.10.*)
+      ui_print "    [+] Firmware baseline verified: 5.10.xxx (Safe to install)"
+      ;;
+    *)
+      ui_print "    [!] Warning: Unrecognized firmware kernel version: $ACTIVE_KERNEL_VER"
+      ui_print "    [!] Tanzanite Halium requires a 5.10.xxx firmware baseline."
+      ;;
+  esac
 fi
 
 # Flash LK Fenrir and Preloader Engineering to BOTH slots (with smart hash verification & skip confirmation)

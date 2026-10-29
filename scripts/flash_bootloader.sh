@@ -50,6 +50,27 @@ bold "[*] Device detected in $MODE mode."
 if [ "$MODE" = "adb" ]; then
     bold "== Checking existing partition integrity on device =="
     
+    # Kernel version safety check (MUST NOT be 6.12.xxx)
+    DEVICE_KVER=$(adb shell "uname -r 2>/dev/null || cat /proc/version 2>/dev/null" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[^ ]*' | head -n1 || true)
+    if [ -n "$DEVICE_KVER" ]; then
+        case "$DEVICE_KVER" in
+            6.12.*)
+                red "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                red "[!] FATAL: Device kernel is $DEVICE_KVER (Linux 6.12.xxx)!"
+                red "[!] Flashing Preloader Eng and LK Fenrir on 6.12 WILL HARDBRICK the device!"
+                red "[!] Only the Linux 5.10.xxx firmware baseline is supported."
+                red "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                exit 1
+                ;;
+            5.10.*)
+                green "  [+] Device kernel baseline: $DEVICE_KVER (5.10.xxx verified safe)"
+                ;;
+            *)
+                yellow "  [*] Device kernel reported: $DEVICE_KVER"
+                ;;
+        esac
+    fi
+
     # Read hashes from device
     CURR_LK_A=$(adb shell "su -c 'head -c $LK_SIZE /dev/block/by-name/lk_a | sha256sum 2>/dev/null'" | awk '{print $1}')
     CURR_LK_B=$(adb shell "su -c 'head -c $LK_SIZE /dev/block/by-name/lk_b | sha256sum 2>/dev/null'" | awk '{print $1}')
