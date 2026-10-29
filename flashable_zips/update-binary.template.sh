@@ -684,22 +684,69 @@ if [ -e "$USERDATA_PART" ]; then
 
     # Check if a valid Ubuntu Touch rootfs is already installed
     IS_ROOTFS_INSTALLED=0
-    if [ -f "/data/.clean_install" ] || [ -f "/data/ubuntu/.clean_install" ]; then
-      ui_print "[!] Clean install requested (.clean_install detected)."
-      ui_print "[*] Removing existing /data/ubuntu rootfs..."
-      rm -rf /data/ubuntu
-      mkdir -p /data/ubuntu
-      rm -f /data/.clean_install /data/ubuntu/.clean_install 2>/dev/null || true
+    DO_CLEAN_INSTALL=0
+
+    if [ -f "/data/.clean_install" ] || [ -f "/data/ubuntu/.clean_install" ] || [ -f "/sdcard/.clean_install" ]; then
+      ui_print "[!] Clean install flag detected (.clean_install)."
+      DO_CLEAN_INSTALL=1
     elif [ -d "/data/ubuntu/usr" ] && [ -d "/data/ubuntu/etc" ] && [ -f "/data/ubuntu/etc/os-release" ]; then
       IS_ROOTFS_INSTALLED=1
     fi
 
-    if [ "$IS_ROOTFS_INSTALLED" -eq 1 ]; then
-      ui_print "[*] Existing Ubuntu Touch installation detected in /data/ubuntu."
-      ui_print "[*] Skipping base rootfs extraction (preserving system state & user data)..."
-    else
+    # Interactive prompt if an existing rootfs is found (defaults to Direct Update without wiping rootfs)
+    if [ "$IS_ROOTFS_INSTALLED" -eq 1 ] && [ "$DO_CLEAN_INSTALL" -eq 0 ]; then
+      if [ -f "/data/.update" ] || [ -f "/data/ubuntu/.update" ] || [ -f "/sdcard/.update" ]; then
+        ui_print "[+] Direct update flag detected (.update). Preserving /data/ubuntu rootfs."
+        DO_CLEAN_INSTALL=0
+      else
+        ui_print "=============================================="
+        ui_print " Ubuntu Touch Direct Update Selection "
+        ui_print "=============================================="
+        ui_print "[*] Existing Ubuntu Touch installation detected in /data/ubuntu."
+        ui_print "[?] Choose installation mode (Default: DIRECT UPDATE in 5s):"
+        ui_print "    -> DIRECT UPDATE: Preserves /data/ubuntu (keeps apps, personal files & data)."
+        ui_print "                      Updates Halium kernel, bootloader, and device system overlay."
+        ui_print "    -> CLEAN INSTALL: Wipes /data/ubuntu and performs a fresh rootfs extraction."
+        ui_print ""
+        ui_print "    -> Press Volume UP within 5s for CLEAN INSTALL (Wipe /data/ubuntu)"
+        ui_print "    -> Press Volume DOWN or wait 5s for DIRECT UPDATE (Preserve rootfs)"
+
+        KEY_PRESSED=""
+        if [ -n "$KPD_DEV" ] && [ -e "$KPD_DEV" ] && which getevent >/dev/null 2>&1; then
+          EV_DATA=$("$BB" timeout 5 getevent -c 2 "$KPD_DEV" 2>/dev/null || true)
+          case "$EV_DATA" in
+            *0073*|*0001*0073*) KEY_PRESSED="UP" ;;
+            *0072*|*0001*0072*) KEY_PRESSED="DOWN" ;;
+          esac
+        else
+          "$BB" sleep 5 2>/dev/null || sleep 5
+        fi
+
+        if [ "$KEY_PRESSED" = "UP" ]; then
+          ui_print "[!] Volume UP pressed: Clean install selected."
+          DO_CLEAN_INSTALL=1
+        else
+          ui_print "[+] Direct update selected: Preserving /data/ubuntu rootfs & user data."
+          DO_CLEAN_INSTALL=0
+        fi
+      fi
+    fi
+
+    if [ "$DO_CLEAN_INSTALL" -eq 1 ]; then
+      ui_print "[*] Removing existing /data/ubuntu rootfs for clean install..."
+      rm -rf /data/ubuntu
+      mkdir -p /data/ubuntu
+      rm -f /data/.clean_install /data/ubuntu/.clean_install /sdcard/.clean_install 2>/dev/null || true
       ui_print "[*] Extracting ubuntu-touch-hybris-rootfs-arm64.tar.gz to /data/ubuntu..."
       unzip -p "$ZIPFILE" "ubuntu-touch-hybris-rootfs-arm64.tar.gz" | "$BB" tar --numeric-owner -xzpf - -C /data/ubuntu/
+    else
+      if [ "$IS_ROOTFS_INSTALLED" -eq 1 ]; then
+        ui_print "[*] Preserving existing /data/ubuntu rootfs (user data, configs, packages kept intact)."
+        ui_print "[*] Proceeding with direct update of device overlay, kernel, and configs..."
+      else
+        ui_print "[*] Fresh install: Extracting ubuntu-touch-hybris-rootfs-arm64.tar.gz to /data/ubuntu..."
+        unzip -p "$ZIPFILE" "ubuntu-touch-hybris-rootfs-arm64.tar.gz" | "$BB" tar --numeric-owner -xzpf - -C /data/ubuntu/
+      fi
     fi
 
     # Extract Halium 12 LXC container (android-rootfs.img)
@@ -736,6 +783,13 @@ if [ -e "$USERDATA_PART" ]; then
       ui_print "[+] Ubuntu Touch rootfs updated with latest device overlay!"
     else
       ui_print "[+] Ubuntu Touch rootfs, Android LXC container & device overlay extracted to /data/ubuntu!"
+    fi
+
+    # Write build manifest to /data/ubuntu/etc/tanzanite-build.prop
+    if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "META-INF/tanzanite/build.prop"; then
+      unzip -p "$ZIPFILE" "META-INF/tanzanite/build.prop" > /data/ubuntu/etc/tanzanite-build.prop 2>/dev/null || true
+      chmod 644 /data/ubuntu/etc/tanzanite-build.prop 2>/dev/null || true
+      ui_print "[+] Updated build manifest: /etc/tanzanite-build.prop"
     fi
 
     # Provision Ubuntu Touch apt dependencies and sandbox fixes

@@ -103,10 +103,36 @@ cp -f "$ROOT_DIR/ota/halium_halium_arm64.tar.xz" "$TMP_STAGE/halium_halium_arm64
 cp -f "$OUT_DIR/device_tanzanite.tar.xz" "$TMP_STAGE/device_tanzanite.tar.xz"
 cp -f "$OUT_DIR/device_tanzanite_system.tar.gz" "$TMP_STAGE/device_tanzanite_system.tar.gz"
 
+# Manifest inside the zip so a flashed device can identify its own build
+echo "[*] Writing build manifest..."
+mkdir -p "$TMP_STAGE/META-INF/tanzanite"
+PORT_VERSION="1.1.0"
+[ -f "$ROOT_DIR/VERSION" ] && PORT_VERSION="$(cat "$ROOT_DIR/VERSION")"
+BUILD_STAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+GIT_SHORT="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "nogit")"
+
+cat > "$TMP_STAGE/META-INF/tanzanite/build.prop" <<MANIFEST
+# Build identification for this installer package.
+# Read at runtime by the installer and written to /data/ubuntu/etc/tanzanite-build.prop
+tanzanite.build.version=${PORT_VERSION}
+tanzanite.build.device=tanzanite
+tanzanite.build.ut_release=ut20.04
+tanzanite.build.halium=halium12
+tanzanite.build.date=${BUILD_STAMP}
+tanzanite.build.commit=${GIT_SHORT}
+tanzanite.build.kernel=${DETECTED_KERNEL_VER}
+tanzanite.build.modules=385
+tanzanite.build.installer=$(basename "$TARGET_ZIP")
+MANIFEST
+
 # 5. Create zip
 echo "[*] Creating $TARGET_ZIP..."
 cd "$TMP_STAGE"
 zip -r9 "$TARGET_ZIP" META-INF tools vbmeta partitions ubuntu-touch-hybris-rootfs-arm64.tar.gz halium_halium_arm64.tar.xz device_tanzanite.tar.xz device_tanzanite_system.tar.gz
 
+ZIP_SHA=$(sha256sum "$TARGET_ZIP" | cut -d' ' -f1)
+echo "$ZIP_SHA  $(basename "$TARGET_ZIP")" > "${TARGET_ZIP}.sha256"
+
 echo "[+] Installer package ready: $TARGET_ZIP"
-ls -lh "$TARGET_ZIP"
+ls -lh "$TARGET_ZIP" "${TARGET_ZIP}.sha256"
+echo "[+] sha256: $ZIP_SHA"

@@ -75,6 +75,7 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 3. **Flashable Recovery Installer**:
    - Standalone TWRP/recovery flashable zip (`tanzanite-halium.zip`) with dynamic A/B slot detection.
    - Strict kernel baseline validation enforcing Linux 5.10.xxx (aborts on Linux 6.12.xxx to prevent device hardbrick).
+   - Direct Update mode automatically preserves existing `/data/ubuntu` rootfs, user data, and personal apps while upgrading the kernel, bootloader, and device system overlay without wiping.
    - Automatic vendor fstab patching for unencrypted ext4 userdata.
    - Full AVB verification handling (`vbmeta`, `vbmeta_system`, `vbmeta_vendor`).
    - Integrated bootloader security flashing (LK Fenrir and Preloader Engineering) with interactive skip detection.
