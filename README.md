@@ -49,7 +49,7 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 | **Battery & Power Management** | Working | Accurate fuelgauge reporting via UPower BMS filter shim |
 | **Audio (Speaker / Playback)** | Working | PulseAudio with Droid HAL 30 & clean Aurisys routing |
 | **Audio (Microphone / Input)** | Working | Primary mic routed through Droid source |
-| **Flashlight / Torch** | Working | Controlled via Ayatana Power Indicator & sysfs bridge daemon |
+| **Flashlight / Torch** | Not Working | WIP |
 | **Screen Rotation / Sensors** | Working | Accelerometer & Orientation via HIDL 2.0 sensorfw |
 | **Cellular / 4G LTE Data** | Working | Dual SIM slots detected via ofono-sailfish & MTK IRadio@1.2 |
 | **WiFi & Bluetooth** | Working | Managed by ConnMan & Bluez / Bluebinder |
