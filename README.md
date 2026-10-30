@@ -47,7 +47,7 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 | **Lomiri UI / Compositor** | Working | Native Wayland via `lomiri-system-compositor` |
 | **GPU Acceleration** | Working | Mali-G57 MC2 via libhybris / Android 12 Gralloc & EGL |
 | **Battery & Power Management** | Working | Accurate fuelgauge reporting via UPower BMS filter shim |
-| **Audio (Speaker / Playback)** | Working | Pinned 48kHz native rate, SiA81xx smartPA & full Aurisys DSP libraries |
+| **Audio (Speaker / Playback)** | Working | Pinned 48kHz native rate, SiA81xx smartPA & Aurisys DSP hotfix unblocking speaker playback |
 | **Audio (Microphone / Input)** | Working | Primary mic routed through Droid source |
 | **Haptics / Vibration** | Working | `regulator-vibrator` via timed_output udev rule |
 | **Flashlight / Torch** | Working | `tanzanite-flashlight-bridge` daemon + MTK flashlight drivers |
@@ -129,7 +129,7 @@ Installation workflow overview:
 ## Attribution & Credits
 
 - Port maintainer and dual-boot ecosystem: [iprjkt](https://github.com/iprjkt)
-- Audio DSP configuration, 48kHz policy pinning, vendor_dlkm module auditing, and hardware validation scripts adapted from work by [itswill00](https://github.com/itswill00/tanzanite-ubuntu-touch), used under the Apache-2.0 license.
+- Audio DSP configuration, 48kHz policy pinning, Aurisys SMARTPA playback fix, vendor_dlkm module auditing, and hardware validation scripts adapted from work by [itswill00](https://github.com/itswill00/tanzanite-ubuntu-touch), used under the Apache-2.0 license.
 
 ---
 

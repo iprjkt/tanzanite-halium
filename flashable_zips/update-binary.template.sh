@@ -149,7 +149,9 @@ elif [ -e "/dev/block/by-name/super" ]; then
   [ -e "/dev/block/mapper/vendor${SLOT}" ] && VENDOR_PART="/dev/block/mapper/vendor${SLOT}"
 fi
 
-[ -n "$VENDOR_PART" ] && [ -e "$VENDOR_PART" ] || abort "Vendor partition for slot $SLOT not found!"
+if [ -z "$VENDOR_PART" ] || [ ! -e "$VENDOR_PART" ]; then
+  abort "Vendor partition for slot $SLOT not found!"
+fi
 umount -fl "$VENDOR_PART" 2>/dev/null || true
 blockdev --setrw "$VENDOR_PART" 2>/dev/null || true
 
@@ -327,7 +329,6 @@ else
     ui_print "[*] Repacked EROFS size: $NEW_SIZE bytes (limit: $ORIG_SIZE bytes)"
     if [ "$NEW_SIZE" -gt "$ORIG_SIZE" ]; then
       ui_print "[!] Repacked image ($NEW_SIZE bytes) exceeds partition size ($ORIG_SIZE bytes)."
-      RESIZED=false
       if [ -e "/dev/block/by-name/super" ] && [ -x "$WORK/tools/lptools" ]; then
         ui_print "[*] Expanding dynamic partition vendor${SLOT} via lptools..."
 
@@ -342,15 +343,18 @@ else
         "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --unmap "vendor${SLOT}" 2>/dev/null || true
 
         # Resize partition in super metadata
-        if "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --resize "vendor${SLOT}" "$TARGET_SIZE" 2>&1; then
-          RESIZED=true
-        elif "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --unlimited-group --resize "vendor${SLOT}" "$TARGET_SIZE" 2>&1; then
-          RESIZED=true
-        elif "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --resize "vendor${SLOT}" "$TARGET_SIZE" 2>&1; then
-          RESIZED=true
-        elif "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --resize "vendor" "$TARGET_SIZE" 2>&1; then
-          RESIZED=true
-        fi
+        # Try the known lptools invocations in order. The resulting partition size is
+        # compared against TARGET_SIZE below, which is the authoritative check.
+        for attempt in \
+            "--suffix $SLOT --resize vendor${SLOT}" \
+            "--suffix $SLOT --unlimited-group --resize vendor${SLOT}" \
+            "--resize vendor${SLOT}" \
+            "--suffix $SLOT --resize vendor"; do
+          if "$WORK/tools/lptools" --super /dev/block/by-name/super \
+              --slot "$SLOT_NUM" $attempt "$TARGET_SIZE" 2>&1; then
+            break
+          fi
+        done
 
         # Remap partition to update device-mapper table in kernel
         "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --map "vendor${SLOT}" || true
