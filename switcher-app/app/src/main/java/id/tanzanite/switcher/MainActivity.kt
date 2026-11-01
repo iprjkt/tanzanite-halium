@@ -1,6 +1,12 @@
 package id.tanzanite.switcher
 
+import android.app.WallpaperManager
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -24,6 +30,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,25 +39,36 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -62,7 +81,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.example.liquidglass.GlassAccessibilityMode
+import com.example.liquidglass.GlassMaterial
 import com.example.liquidglass.LiquidGlassTabBar
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -213,6 +235,75 @@ object RootShell {
             osVersion = map["OSVER"]?.ifBlank { Build.DISPLAY } ?: Build.DISPLAY
         )
     }
+
+    suspend fun loadWallpaperBitmap(context: Context): Bitmap? = withContext(Dispatchers.IO) {
+        val directCandidates = listOf(
+            File("/data/system/theme_magic/users/0/wallpaper/image/home_wallpaper.jpg"),
+            File("/data/system/theme_magic/users/0/wallpaper/image/lock_wallpaper.jpg"),
+            File("/data/system/users/0/blurwallpaper")
+        )
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = 2
+        }
+
+        // 1. Direct candidate files on HyperOS / MIUI
+        for (f in directCandidates) {
+            try {
+                if (f.exists() && f.canRead() && f.length() > 0) {
+                    val bmp = BitmapFactory.decodeFile(f.absolutePath, opts)
+                    if (bmp != null) return@withContext bmp
+                }
+            } catch (_: Exception) {}
+        }
+
+        // 2. Standard AOSP WallpaperManager (for non-MIUI / vanilla Android)
+        try {
+            val wm = WallpaperManager.getInstance(context)
+            val d = try {
+                wm.drawable ?: wm.builtInDrawable
+            } catch (_: SecurityException) {
+                null
+            }
+            if (d != null) {
+                if (d is BitmapDrawable) {
+                    return@withContext d.bitmap
+                }
+                val w = d.intrinsicWidth.takeIf { it > 0 } ?: 400
+                val h = d.intrinsicHeight.takeIf { it > 0 } ?: 400
+                val bmp = Bitmap.createBitmap(w.coerceAtMost(800), h.coerceAtMost(800), Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(bmp)
+                d.setBounds(0, 0, canvas.width, canvas.height)
+                d.draw(canvas)
+                return@withContext bmp
+            }
+        } catch (_: Exception) {}
+
+        // 3. Root extraction from protected system wallpaper locations (HyperOS / MIUI / live wallpapers)
+        try {
+            val cacheDir = context.cacheDir
+            val targetFile = File(cacheDir, "current_wallpaper.img")
+            val script = """
+                TARGET="${targetFile.absolutePath}"
+                for src in /data/system/theme_magic/users/0/wallpaper/image/home_wallpaper.jpg /data/system/users/0/wallpaper /data/system/users/0/wallpaper_orig /data/system/users/0/blurwallpaper /data/system_ce/0/wallpaper; do
+                    if [ -s "${'$'}src" ]; then
+                        cp "${'$'}src" "${'$'}TARGET"
+                        chmod 644 "${'$'}TARGET"
+                        exit 0
+                    fi
+                done
+                exit 1
+            """.trimIndent()
+            val (code, _) = exec(script)
+            if (code == 0 && targetFile.exists() && targetFile.length() > 0) {
+                val bmp = BitmapFactory.decodeFile(targetFile.absolutePath, opts)
+                if (bmp != null) {
+                    return@withContext bmp
+                }
+            }
+        } catch (_: Exception) {}
+
+        null
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -278,6 +369,9 @@ class MainActivity : ComponentActivity() {
                                     .setDuration(250)
                                     .start()
                             }
+                        },
+                        onScroll = {
+                            floatingBarRef?.invalidate()
                         }
                     )
                 }
@@ -296,11 +390,29 @@ class MainActivity : ComponentActivity() {
             ).apply {
                 bottomMargin = (20 * density).toInt()
             }
+            enableBackdropBlur = true
+            useHardwareBlurWhenPossible = true
+            accessibilityMode = GlassAccessibilityMode.FORCE_FULL
             enableDynamicBackground = true
             enableAdaptiveTint = true
+            enableEdgeHighlight = true
+            edgeHighlightBorderWidth = 1f * density
+            edgeHighlightOpacity = 28f
+            blurAmount = 24f
+            saturation = 125f
+            material = GlassMaterial.CLEAR
+            setGlassTint(0x00000000, 0.0f)
             cornerRadius = 999f
             selectedTintColor = 0xFF0A84FF.toInt()
             backdropSource = composeView
+
+            val borderDrawable = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 999f * density
+                setStroke((1 * density).toInt(), android.graphics.Color.argb(45, 255, 255, 255))
+                setColor(android.graphics.Color.TRANSPARENT)
+            }
+            foreground = borderDrawable
 
             val switchDrawable = ContextCompat.getDrawable(context, R.drawable.ic_nav_switch)
             val infoDrawable = ContextCompat.getDrawable(context, R.drawable.ic_nav_info)
@@ -338,13 +450,17 @@ class MainActivity : ComponentActivity() {
 fun MainAppScreen(
     selectedTab: Int,
     onTabChanged: (Int) -> Unit,
-    onDialogVisibilityChanged: (Boolean) -> Unit = {}
+    onDialogVisibilityChanged: (Boolean) -> Unit = {},
+    onScroll: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(initialPage = selectedTab) { 2 }
 
     val switcherScrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val aboutScrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
+
+    val switcherListState = rememberLazyListState()
+    val aboutListState = rememberLazyListState()
 
     // Sync tab changes from floating bar to pager with smooth spring animation
     LaunchedEffect(selectedTab) {
@@ -364,6 +480,17 @@ fun MainAppScreen(
         if (selectedTab != pagerState.currentPage) {
             onTabChanged(pagerState.currentPage)
         }
+    }
+
+    // Continuously update floating liquid glass bar during scroll or page transition
+    LaunchedEffect(switcherListState.firstVisibleItemScrollOffset, switcherListState.firstVisibleItemIndex) {
+        onScroll()
+    }
+    LaunchedEffect(aboutListState.firstVisibleItemScrollOffset, aboutListState.firstVisibleItemIndex) {
+        onScroll()
+    }
+    LaunchedEffect(pagerState.currentPageOffsetFraction) {
+        onScroll()
     }
 
     var status by remember { mutableStateOf(SystemStatus()) }
@@ -522,50 +649,89 @@ fun MainAppScreen(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
         ) { page ->
-            if (page == 0) {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        TopAppBar(
-                            title = "Tanzanite OS Switcher",
-                            largeTitle = "Tanzanite Dual-Boot",
-                            scrollBehavior = switcherScrollBehavior
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clipToBounds()
+                    .background(MiuixTheme.colorScheme.background)
+            ) {
+                if (page == 0) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = Color.Transparent,
+                        topBar = {
+                            TopAppBar(
+                                title = "Tanzanite OS Switcher",
+                                largeTitle = "Tanzanite Dual-Boot",
+                                scrollBehavior = switcherScrollBehavior,
+                                color = Color.Transparent,
+                                modifier = Modifier.background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.85f),
+                                            Color.Black.copy(alpha = 0.50f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                )
+                            )
+                        }
+                    ) { innerPadding ->
+                        SwitcherContent(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .nestedScroll(switcherScrollBehavior.nestedScrollConnection),
+                            listState = switcherListState,
+                            innerPadding = innerPadding,
+                            status = status,
+                            isBusy = isBusy,
+                            consoleLog = consoleLog,
+                            onRefresh = { refreshStatus() },
+                            onBackupStock = { backupCurrentStock() },
+                            onRequestUbuntu = { showConfirmUbuntu.value = true },
+                            onRequestRestore = { showConfirmAndroid.value = true }
                         )
                     }
-                ) { innerPadding ->
-                    SwitcherContent(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .nestedScroll(switcherScrollBehavior.nestedScrollConnection),
-                        innerPadding = innerPadding,
-                        status = status,
-                        isBusy = isBusy,
-                        consoleLog = consoleLog,
-                        onRefresh = { refreshStatus() },
-                        onBackupStock = { backupCurrentStock() },
-                        onRequestUbuntu = { showConfirmUbuntu.value = true },
-                        onRequestRestore = { showConfirmAndroid.value = true }
-                    )
-                }
-            } else {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        TopAppBar(
-                            title = "About",
-                            largeTitle = "About",
-                            scrollBehavior = aboutScrollBehavior
+                } else {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = Color.Transparent,
+                        topBar = {
+                            TopAppBar(
+                                title = "About",
+                                largeTitle = "About",
+                                scrollBehavior = aboutScrollBehavior,
+                                color = Color.Transparent,
+                                modifier = Modifier.background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.85f),
+                                            Color.Black.copy(alpha = 0.50f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                )
+                            )
+                        }
+                    ) { innerPadding ->
+                        AboutContent(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .nestedScroll(aboutScrollBehavior.nestedScrollConnection),
+                            listState = aboutListState,
+                            innerPadding = innerPadding,
+                            status = status
                         )
                     }
-                ) { innerPadding ->
-                    AboutContent(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .nestedScroll(aboutScrollBehavior.nestedScrollConnection),
-                        innerPadding = innerPadding,
-                        status = status
-                    )
                 }
+
+                // Frosted gradient scrim overlay behind status bar & header
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsTopHeight(WindowInsets.statusBars)
+                        .background(Color.Black.copy(alpha = 0.65f))
+                )
             }
         }
     }
@@ -640,6 +806,7 @@ fun MainAppScreen(
 @Composable
 fun SwitcherContent(
     modifier: Modifier = Modifier,
+    listState: LazyListState,
     innerPadding: PaddingValues,
     status: SystemStatus,
     isBusy: Boolean,
@@ -650,15 +817,12 @@ fun SwitcherContent(
     onRequestRestore: () -> Unit
 ) {
     val layoutDirection = LocalLayoutDirection.current
-    val currentTop = innerPadding.calculateTopPadding()
-    val orientation = LocalConfiguration.current.orientation
-    var stableTopPadding by remember(orientation) { mutableStateOf(currentTop) }
-    if (currentTop > stableTopPadding) {
-        stableTopPadding = currentTop
-    }
-    val topPadding = if (stableTopPadding > 0.dp) stableTopPadding else currentTop
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val topBarPadding = innerPadding.calculateTopPadding()
+    val topPadding = if (topBarPadding > statusBarTop) topBarPadding else (statusBarTop + 56.dp)
 
     LazyColumn(
+        state = listState,
         modifier = modifier.overScrollVertical(),
         contentPadding = PaddingValues(
             top = topPadding + 8.dp,
@@ -676,7 +840,7 @@ fun SwitcherContent(
             ) {
                 SuperArrow(
                     title = "Root Access (KernelSU / su)",
-                    summary = if (status.hasRoot) "Granted (uid=0)" else "Not detected — grant root in KernelSU",
+                    summary = if (status.hasRoot) "Granted (uid=0)" else "Not detected - grant root in KernelSU",
                     rightText = if (status.hasRoot) "Active" else "Denied",
                     onClick = { onRefresh() }
                 )
@@ -797,6 +961,7 @@ fun SwitcherContent(
 @Composable
 fun AboutContent(
     modifier: Modifier = Modifier,
+    listState: LazyListState,
     innerPadding: PaddingValues,
     status: SystemStatus
 ) {
@@ -809,15 +974,16 @@ fun AboutContent(
     }
 
     val layoutDirection = LocalLayoutDirection.current
-    val currentTop = innerPadding.calculateTopPadding()
-    val orientation = LocalConfiguration.current.orientation
-    var stableTopPadding by remember(orientation) { mutableStateOf(currentTop) }
-    if (currentTop > stableTopPadding) {
-        stableTopPadding = currentTop
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val topBarPadding = innerPadding.calculateTopPadding()
+    val topPadding = if (topBarPadding > statusBarTop) topBarPadding else (statusBarTop + 56.dp)
+
+    val wallpaperBitmap by produceState<Bitmap?>(initialValue = null) {
+        value = RootShell.loadWallpaperBitmap(context)
     }
-    val topPadding = if (stableTopPadding > 0.dp) stableTopPadding else currentTop
 
     LazyColumn(
+        state = listState,
         modifier = modifier.overScrollVertical(),
         contentPadding = PaddingValues(
             top = topPadding + 8.dp,
@@ -826,43 +992,104 @@ fun AboutContent(
             end = innerPadding.calculateEndPadding(layoutDirection)
         )
     ) {
-        // Top Header matching HyperCeiler layout with App Icon
+        // Hero Card with Wallpaper Background + Blur + Scrim
         item {
-            Column(
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 10.dp, bottom = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                insideMargin = PaddingValues(0.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(80.dp)
-                        .shadow(elevation = 4.dp, shape = CircleShape)
-                        .clip(CircleShape),
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.icon_app),
-                        contentDescription = "App Icon",
-                        modifier = Modifier.size(80.dp)
-                    )
+                    val currentWp = wallpaperBitmap
+                    if (currentWp != null) {
+                        Image(
+                            bitmap = currentWp.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .matchParentSize()
+                                .then(
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        Modifier.blur(radius = 10.dp)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        )
+                        // Dark scrim overlay for high contrast text readability
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.Black.copy(alpha = 0.20f),
+                                            Color.Black.copy(alpha = 0.50f)
+                                        )
+                                    )
+                                )
+                        )
+                    } else {
+                        // Gradient fallback if wallpaper is unavailable
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color(0xFF1E2638),
+                                            Color(0xFF0F141E)
+                                        )
+                                    )
+                                )
+                        )
+                    }
+
+                    // Hero content: app icon, app title, and version
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp, horizontal = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .shadow(elevation = 6.dp, shape = CircleShape)
+                                .clip(CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.icon_app),
+                                contentDescription = "App Icon",
+                                modifier = Modifier.size(80.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Tanzanite Switcher",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "1.0.0 | Halium 12 Dual-Boot",
+                            fontSize = 13.sp,
+                            color = Color.White.copy(alpha = 0.82f)
+                        )
+                    }
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = "Tanzanite Switcher",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Text(
-                    text = "1.0.0 | Halium 12 Dual-Boot",
-                    fontSize = 13.sp,
-                    color = Color.Gray
-                )
             }
         }
 
