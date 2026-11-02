@@ -92,9 +92,17 @@ cp -f "$OUT_DIR/partitions/dtbo.img" "$TMP_STAGE/partitions/"
 [ -f "$ROOT_DIR/preloader_tanzanite.bin" ] && cp -f "$ROOT_DIR/preloader_tanzanite.bin" "$TMP_STAGE/partitions/preloader_eng.bin"
 
 # Rootfs & overlays
-ROOTFS_FILE="/mnt/dreamybull/ubuntu-touch-hybris-rootfs-arm64.tar.gz"
-if [ ! -f "$ROOTFS_FILE" ]; then
-    ROOTFS_FILE="$(find /mnt "$ROOT_DIR" -maxdepth 2 -name "ubuntu-touch-hybris-rootfs-arm64.tar.gz" 2>/dev/null | head -n 1 || true)"
+ROOTFS_FILE="${ROOTFS_FILE:-}"
+if [ -z "$ROOTFS_FILE" ] || [ ! -f "$ROOTFS_FILE" ]; then
+    if [ -f "$ROOT_DIR/ota/ubuntu-touch-android9plus-rootfs-arm64.tar.gz" ]; then
+        ROOTFS_FILE="$ROOT_DIR/ota/ubuntu-touch-android9plus-rootfs-arm64.tar.gz"
+    elif [ -f "$ROOT_DIR/ubuntu-touch-hybris-rootfs-arm64.tar.gz" ]; then
+        ROOTFS_FILE="$ROOT_DIR/ubuntu-touch-hybris-rootfs-arm64.tar.gz"
+    elif [ -f "/mnt/dreamybull/ubuntu-touch-hybris-rootfs-arm64.tar.gz" ]; then
+        ROOTFS_FILE="/mnt/dreamybull/ubuntu-touch-hybris-rootfs-arm64.tar.gz"
+    else
+        ROOTFS_FILE="$(find /mnt "$ROOT_DIR" -maxdepth 2 -name "ubuntu-touch-hybris-rootfs-arm64.tar.gz" 2>/dev/null | head -n 1 || true)"
+    fi
 fi
 [ -f "$ROOTFS_FILE" ] || { echo "[-] Error: rootfs tarball not found!"; exit 1; }
 
@@ -116,7 +124,7 @@ cat > "$TMP_STAGE/META-INF/tanzanite/build.prop" <<MANIFEST
 # Read at runtime by the installer and written to /data/ubuntu/etc/tanzanite-build.prop
 tanzanite.build.version=${PORT_VERSION}
 tanzanite.build.device=tanzanite
-tanzanite.build.ut_release=ut20.04
+tanzanite.build.ut_release=ut24.04
 tanzanite.build.halium=halium12
 tanzanite.build.date=${BUILD_STAMP}
 tanzanite.build.commit=${GIT_SHORT}

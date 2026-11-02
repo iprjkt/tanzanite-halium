@@ -2,8 +2,8 @@
 # Builds the flashable recovery installer zip for tanzanite from locally built artifacts.
 #
 # Output naming:
-#   tanzanite-ut20.04-halium12-v<version>-<yyyymmdd>-<gitshort>.zip
-#     ut20.04      Ubuntu Touch rootfs release
+#   tanzanite-ut24.04-halium12-v<version>-<yyyymmdd>-<gitshort>.zip
+#     ut24.04      Ubuntu Touch rootfs release (Noble)
 #     halium12     Halium version the vendor blobs are matched to
 #     v<version>   port version, from PORT_VERSION below
 #     yyyymmdd     build date (UTC)
@@ -14,7 +14,7 @@
 # Expects (relative to the repo root unless overridden by env):
 #   out/partitions/{boot.img,vendor_boot.img,dtbo.img}   from `./build.sh -b workdir`
 #   out/device_tanzanite.tar.xz
-#   ota/ubuntu-touch-android9plus-rootfs-arm64.tar.gz    UT Focal rootfs
+#   ota/ubuntu-touch-android9plus-rootfs-arm64.tar.gz    UT Noble rootfs
 #   ota/halium_halium_arm64.tar.xz                       Halium 12 GSI
 #
 # Usage: ./scripts/build_zip_local.sh
@@ -25,12 +25,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$ROOT/flashable_zips"
 OUT_DIR="${OUT_DIR:-$ROOT/out}"
 PART_DIR="${PART_DIR:-$OUT_DIR/partitions}"
-ROOTFS="${ROOTFS:-$ROOT/ota/ubuntu-touch-android9plus-rootfs-arm64.tar.gz}"
+if [ -f "$ROOT/ota/ubuntu-touch-android9plus-rootfs-arm64.tar.gz" ]; then
+    DEFAULT_ROOTFS="$ROOT/ota/ubuntu-touch-android9plus-rootfs-arm64.tar.gz"
+elif [ -f "$ROOT/ubuntu-touch-hybris-rootfs-arm64.tar.gz" ]; then
+    DEFAULT_ROOTFS="$ROOT/ubuntu-touch-hybris-rootfs-arm64.tar.gz"
+else
+    DEFAULT_ROOTFS="$ROOT/ota/ubuntu-touch-android9plus-rootfs-arm64.tar.gz"
+fi
+ROOTFS="${ROOTFS:-$DEFAULT_ROOTFS}"
 GSI="${GSI:-$ROOT/ota/halium_halium_arm64.tar.xz}"
 
 # --- version metadata --------------------------------------------------------
 PORT_VERSION="${PORT_VERSION:-1.1.0}"
-UT_RELEASE="ut20.04"
+UT_RELEASE="ut24.04"
 HALIUM_VERSION="halium12"
 BUILD_DATE="$(date -u +%Y%m%d)"
 BUILD_STAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -74,10 +81,14 @@ chmod 755 "$STAGE/tools/"*
 cp -f "$SCRIPT_DIR/format_userdata_ext4/tools/"* "$STAGE/tools/" 2>/dev/null || true
 
 # Pre-disabled vbmeta images (AVB flags already cleared)
-if [ -d "$SCRIPT_DIR/vbmeta" ]; then
+if [ -d "$SCRIPT_DIR/v1/vbmeta" ]; then
+    cp -f "$SCRIPT_DIR/v1/vbmeta/"* "$STAGE/vbmeta/"
+elif [ -d "$SCRIPT_DIR/vbmeta" ]; then
     cp -f "$SCRIPT_DIR/vbmeta/"* "$STAGE/vbmeta/"
+elif [ -d "$ROOT/vbmeta_disabled" ]; then
+    cp -f "$ROOT/vbmeta_disabled/"* "$STAGE/vbmeta/"
 else
-    echo "[-] Missing flashable_zips/vbmeta/ (vbmeta*.img required for prebuilt mode)" >&2
+    echo "[-] Missing vbmeta prebuilt directory (vbmeta*.img required for prebuilt mode)" >&2
     exit 1
 fi
 

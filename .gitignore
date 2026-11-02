@@ -1,6 +1,7 @@
 /out
 /workdir
 /build
+/dist
 /ota
 /partitions
 /stock_backup/
@@ -10,6 +11,7 @@
 /flashable_tools/
 /vbmeta_disabled/
 ubuntu-rootfs-backup.tar
+ubuntu-touch-hybris-rootfs-arm64.tar.gz
 tanzanite-halium.zip
 *.zip
 *.apk
