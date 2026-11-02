@@ -833,14 +833,15 @@ if [ -e "$USERDATA_PART" ]; then
   fi
 fi
 
-# 11. Flash Halium boot, vendor_boot, and dtbo to active slot
-ui_print "[*] Flashing Halium boot, vendor_boot, and dtbo to slot $SLOT..."
-for p in boot vendor_boot dtbo; do
+# 11. Flash Halium boot and dtbo to active slot (preserve vendor_boot for OrangeFox recovery)
+ui_print "[*] Flashing Halium boot and dtbo to slot $SLOT..."
+for p in boot dtbo; do
   TARGET_PART="/dev/block/by-name/${p}${SLOT}"
   blockdev --setrw "$TARGET_PART" 2>/dev/null || true
   dd if="$WORK/partitions/${p}.img" of="$TARGET_PART" bs=4M
   ui_print "    [+] Flashed ${p}${SLOT} <- Halium ${p}.img"
 done
+ui_print "[*] Preserved vendor_boot${SLOT} (maintains OrangeFox recovery ramdisk)"
 sync
 
 rm -rf "$WORK"

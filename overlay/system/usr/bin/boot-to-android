@@ -44,8 +44,8 @@ fi
 
 echo "[*] Using stock backup directory: $BACKUP_DIR"
 
-# 3. Validate all 3 stock images before flashing anything
-for p in boot vendor_boot dtbo; do
+# 3. Validate stock images before flashing anything
+for p in boot dtbo; do
   IMG="$BACKUP_DIR/${p}_stock.img"
   if [ ! -s "$IMG" ]; then
     echo "[!] Error: Missing or empty backup image: $IMG" >&2
@@ -91,8 +91,8 @@ echo "    boot${SLOT}        -> $BOOT_DEV"
 echo "    vendor_boot${SLOT} -> $VBOOT_DEV"
 echo "    dtbo${SLOT}        -> $DTBO_DEV"
 
-# 5. Flash stock images
-for item in "boot:$BOOT_DEV" "vendor_boot:$VBOOT_DEV" "dtbo:$DTBO_DEV"; do
+# 5. Flash stock images (preserve vendor_boot for OrangeFox recovery)
+for item in "boot:$BOOT_DEV" "dtbo:$DTBO_DEV"; do
   NAME="${item%%:*}"
   DEV="${item#*:}"
   IMG="$BACKUP_DIR/${NAME}_stock.img"
@@ -102,7 +102,7 @@ for item in "boot:$BOOT_DEV" "vendor_boot:$VBOOT_DEV" "dtbo:$DTBO_DEV"; do
 done
 
 sync
-echo "[+] Stock HyperOS boot, vendor_boot, and dtbo restored to slot $SLOT!"
+echo "[+] Stock HyperOS boot and dtbo restored to slot $SLOT (vendor_boot recovery preserved)!"
 
 if [ "$1" = "--no-reboot" ]; then
   echo "[*] --no-reboot specified; skipping automatic reboot."
