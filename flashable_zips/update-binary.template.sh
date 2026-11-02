@@ -671,6 +671,7 @@ if [ -e "$USERDATA_PART" ]; then
     mkdir -p /data
     mountpoint -q /data 2>/dev/null || mount -t ext4 "$USERDATA_PART" /data
     mkdir -p /data/ubuntu
+    ln -sf ubuntu /data/halium-rootfs 2>/dev/null || true
 
     # Secure Halium & Stock boot/vendor_boot/dtbo backups early before rootfs extraction
     BACKUP_DIR="/data/media/0/.backup"
@@ -781,6 +782,7 @@ if [ -e "$USERDATA_PART" ]; then
       unzip -p "$ZIPFILE" "device_tanzanite_system.tar.gz" | "$BB" gzip -dc | "$BB" tar --numeric-owner -xpf - -C /data/ubuntu/
     fi
     touch /data/ubuntu/.writable_image /data/.writable_image /data/.force-adb /data/ubuntu/.rootfs_installed
+    ln -sf ubuntu /data/halium-rootfs 2>/dev/null || true
 
     [ -d "/data/ubuntu/usr" ] && [ -d "/data/ubuntu/etc" ] && [ -s "/data/ubuntu/var/lib/lxc/android/android-rootfs.img" ] || abort "Rootfs extraction verification failed!"
     if [ "$IS_ROOTFS_INSTALLED" -eq 1 ]; then

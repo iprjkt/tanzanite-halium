@@ -104,6 +104,13 @@ done
 sync
 echo "[+] Halium boot, vendor_boot, and dtbo restored to slot $SLOT!"
 
+# Ensure halium-rootfs symlink exists on userdata
+if [ -d "/data/ubuntu" ] && [ ! -e "/data/halium-rootfs" ]; then
+  ln -sf ubuntu /data/halium-rootfs 2>/dev/null || true
+elif [ -d "/userdata/ubuntu" ] && [ ! -e "/userdata/halium-rootfs" ]; then
+  ln -sf ubuntu /userdata/halium-rootfs 2>/dev/null || true
+fi
+
 if [ "$1" = "--no-reboot" ]; then
   echo "[*] --no-reboot specified; skipping automatic reboot."
   exit 0
