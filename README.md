@@ -1,4 +1,4 @@
-# Tanzanite Halium 12 (Ubuntu Touch 20.04 Focal)
+# Tanzanite Halium 12 (Ubuntu Touch 24.04 Noble)
 
 ```text
                           .-.                 
@@ -20,7 +20,7 @@
                T O U C H                      
 ```
 
-Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosystem for Redmi Note 14 4G (`tanzanite`).
+Halium 12 / Ubuntu Touch 24.04 (Noble Numbat) dual-boot port and switcher ecosystem for Redmi Note 14 4G (`tanzanite`).
 
 ---
 
@@ -33,7 +33,7 @@ Halium 12 / Ubuntu Touch 20.04 (Focal Fossa) dual-boot port and switcher ecosyst
 | **SoC** | MediaTek Helio G99 Ultra (`MT6789`) |
 | **Architecture** | `arm64-v8a` (64-bit) |
 | **Halium Version** | `12` |
-| **Target OS** | Ubuntu Touch Focal (20.04 LTS) |
+| **Target OS** | Ubuntu Touch Noble (24.04 LTS) |
 | **Kernel Source** | [iprjkt/evernight-gki](https://github.com/iprjkt/evernight-gki) (GKI Linux 5.10 baseline) |
 | **Dual-Boot Mode** | Slot A partition swap with stock HyperOS fallback on Slot B |
 
