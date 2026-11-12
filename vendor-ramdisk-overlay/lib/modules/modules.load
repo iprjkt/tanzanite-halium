@@ -18,6 +18,7 @@ battery_auth_class.ko
 binder_gki.ko
 binder_prio.ko
 blocktag.ko
+bnep.ko
 board_temp.ko
 bootprof.ko
 bq25960_charger.ko
@@ -102,6 +103,7 @@ gz_main_mod.ko
 gz_trusty_mod.ko
 gz_tz_system.ko
 gz_virtio_mod.ko
+hci_vhci.ko
 hf_manager.ko
 hq_adapter_class.ko
 hq_charger_class.ko

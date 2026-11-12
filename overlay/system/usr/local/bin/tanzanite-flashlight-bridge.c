@@ -4,20 +4,137 @@
  * Exposes the MTK torch control as a stable, writable file so that
  * ayatana-indicator-power can toggle the flashlight through a plain path
  * (deviceinfo FlashlightSysfsPath=/run/flashlight_bridge) instead of needing to
- * know about the MediaTek flashlight class layout.
+ * know about the MediaTek flashlight layout.
  *
- * ayatana-indicator-power writes "1\n" or "0\n" to /run/flashlight_bridge; this
- * daemon watches that file and forwards the value to the kernel torch node.
+ * On Xiaomi Redmi Note 14 4G (tanzanite / board o7), the camera flash/torch LED
+ * is driven by the Southchip SC6601 subpmic charger via flashlights-mt6789-o7.ko.
+ * The working hardware torch control node is:
+ *   /sys/devices/platform/flashlights_mt6789/mt6789_flash
+ * which accepts "1\n" (enable 110mA torch mode on SC6601 LED1) and "0\n" (disable).
  *
- * The kernel node name differs between MTK kernels, so the daemon probes a list
- * of candidates at start-up and at each toggle. The write format is also probed:
- * mtk flashlight_core expects four space-separated fields ("0 0 0 1"), while the
- * generic leds-class torch takes a bare "1". Both are attempted.
- *
- * Every failure is logged to stderr (captured by the systemd unit), so a missing
- * driver shows up as a clear message instead of silently doing nothing - which
- * is how the original version behaved.
+ * Supports both standard hosted C compilation and freestanding ARM64 Linux
+ * compilation (clang --target=aarch64-linux-gnu -ffreestanding -nostdlib -static).
  */
+
+#define BRIDGE_FILE "/run/flashlight_bridge"
+#define MT6789_FLASH_NODE "/sys/devices/platform/flashlights_mt6789/mt6789_flash"
+
+#if defined(__aarch64__) && !__STDC_HOSTED__
+
+typedef unsigned int uint32_t;
+typedef unsigned long size_t;
+typedef long ssize_t;
+
+#define NULL ((void *)0)
+#define AT_FDCWD (-100)
+#define O_RDONLY 00
+#define O_WRONLY 01
+#define O_RDWR   02
+#define O_CREAT  0100
+#define O_TRUNC  01000
+#define W_OK     2
+
+#define IN_MODIFY      0x00000002
+#define IN_CLOSE_WRITE 0x00000008
+#define IN_MOVED_TO    0x00000080
+#define IN_CREATE      0x00000100
+
+struct inotify_event {
+    int      wd;
+    uint32_t mask;
+    uint32_t cookie;
+    uint32_t len;
+    char     name[];
+};
+
+static inline long syscall1(long n, long a) {
+    register long x8 __asm__("x8") = n;
+    register long x0 __asm__("x0") = a;
+    __asm__ volatile("svc #0" : "+r"(x0) : "r"(x8) : "memory", "cc");
+    return x0;
+}
+
+static inline long syscall3(long n, long a, long b, long c) {
+    register long x8 __asm__("x8") = n;
+    register long x0 __asm__("x0") = a;
+    register long x1 __asm__("x1") = b;
+    register long x2 __asm__("x2") = c;
+    __asm__ volatile("svc #0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2) : "memory", "cc");
+    return x0;
+}
+
+static inline long syscall4(long n, long a, long b, long c, long d) {
+    register long x8 __asm__("x8") = n;
+    register long x0 __asm__("x0") = a;
+    register long x1 __asm__("x1") = b;
+    register long x2 __asm__("x2") = c;
+    register long x3 __asm__("x3") = d;
+    __asm__ volatile("svc #0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2), "r"(x3) : "memory", "cc");
+    return x0;
+}
+
+#define SYS_inotify_init1     26
+#define SYS_inotify_add_watch 27
+#define SYS_faccessat         48
+#define SYS_fchmodat          53
+#define SYS_openat            56
+#define SYS_close             57
+#define SYS_read              63
+#define SYS_write             64
+#define SYS_exit_group        94
+
+static int sys_open(const char *path, int flags, int mode) {
+    return (int)syscall4(SYS_openat, AT_FDCWD, (long)path, flags, mode);
+}
+
+static int sys_close(int fd) {
+    return (int)syscall1(SYS_close, fd);
+}
+
+static ssize_t sys_read(int fd, void *buf, size_t count) {
+    return (ssize_t)syscall3(SYS_read, fd, (long)buf, (long)count);
+}
+
+static ssize_t sys_write(int fd, const void *buf, size_t count) {
+    return (ssize_t)syscall3(SYS_write, fd, (long)buf, (long)count);
+}
+
+static int sys_access_w(const char *path) {
+    return (int)syscall4(SYS_faccessat, AT_FDCWD, (long)path, W_OK, 0);
+}
+
+static int sys_chmod(const char *path, int mode) {
+    return (int)syscall4(SYS_fchmodat, AT_FDCWD, (long)path, mode, 0);
+}
+
+static int sys_inotify_init(void) {
+    return (int)syscall1(SYS_inotify_init1, 0);
+}
+
+static int sys_inotify_add_watch(int fd, const char *path, uint32_t mask) {
+    return (int)syscall3(SYS_inotify_add_watch, fd, (long)path, mask);
+}
+
+static size_t str_len(const char *s) {
+    size_t n = 0;
+    while (s[n]) n++;
+    return n;
+}
+
+static int str_eq(const char *a, const char *b) {
+    while (*a && *b) {
+        if (*a != *b) return 0;
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
+static void log_msg(const char *msg) {
+    sys_write(2, msg, str_len(msg));
+}
+
+#else
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -26,122 +143,208 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #include <sys/inotify.h>
-#include <syslog.h>
 
-#define BRIDGE_FILE "/run/flashlight_bridge"
-#define DEFAULT_TIMEOUT_MS 1000
+static int sys_open(const char *path, int flags, int mode) {
+    return open(path, flags, mode);
+}
+
+static int sys_close(int fd) {
+    return close(fd);
+}
+
+static ssize_t sys_read(int fd, void *buf, size_t count) {
+    return read(fd, buf, count);
+}
+
+static ssize_t sys_write(int fd, const void *buf, size_t count) {
+    return write(fd, buf, count);
+}
+
+static int sys_access_w(const char *path) {
+    return access(path, W_OK);
+}
+
+static int sys_chmod(const char *path, int mode) {
+    return chmod(path, (mode_t)mode);
+}
+
+static int sys_inotify_init(void) {
+    return inotify_init1(0);
+}
+
+static int sys_inotify_add_watch(int fd, const char *path, uint32_t mask) {
+    return inotify_add_watch(fd, path, mask);
+}
+
+static size_t str_len(const char *s) {
+    return strlen(s);
+}
+
+static int str_eq(const char *a, const char *b) {
+    return strcmp(a, b) == 0;
+}
+
+static void log_msg(const char *msg) {
+    ssize_t unused = write(2, msg, strlen(msg));
+    (void)unused;
+}
+
+#endif
+
+struct torch_target {
+    const char *path;
+    const char *on_str;
+    const char *off_str;
+};
 
 /* Candidate kernel nodes, most specific first. */
-static const char *torch_candidates[] = {
-    "/sys/class/flashlight_core/flashlight/flashlight_torch",
-    "/sys/class/flashlight/flashlight_torch",
-    "/sys/class/leds/flashlight/brightness",
-    "/sys/class/leds/torch/brightness",
-    "/sys/class/leds/flash/brightness",
-    NULL
+static const struct torch_target torch_candidates[] = {
+    { MT6789_FLASH_NODE,                                        "1\n",       "0\n"       },
+    { "/sys/class/leds/flashlight/brightness",                  "1\n",       "0\n"       },
+    { "/sys/class/leds/torch/brightness",                       "1\n",       "0\n"       },
+    { "/sys/class/leds/flash/brightness",                       "1\n",       "0\n"       },
+    { "/sys/class/flashlight_core/flashlight/flashlight_torch", "0 0 0 1\n", "0 0 0 0\n" },
+    { "/sys/class/flashlight/flashlight_torch",                 "0 0 0 1\n", "0 0 0 0\n" },
+    { NULL, NULL, NULL }
 };
 
-/* Write formats to try, most specific first. */
-static const char *torch_formats[] = {
-    "0 0 0 %d\n",   /* mtk flashlight_core: <flash> <torch> ... <on> */
-    "%d\n",         /* generic leds brightness / timed_output enable */
-    NULL
-};
-
-static const char *find_torch_node(void) {
-    for (int i = 0; torch_candidates[i]; i++) {
-        if (access(torch_candidates[i], W_OK) == 0)
-            return torch_candidates[i];
+static const struct torch_target *find_torch_target(void) {
+    for (int i = 0; torch_candidates[i].path != NULL; i++) {
+        if (sys_access_w(torch_candidates[i].path) == 0)
+            return &torch_candidates[i];
     }
     return NULL;
 }
 
 static int set_torch(int on) {
-    const char *node = find_torch_node();
-    if (!node) {
-        syslog(LOG_WARNING,
-               "no writable torch node found; is the flashlight kernel module loaded? "
-               "(tried flashlight_core, flashlight, leds/flashlight, leds/torch, leds/flash)");
+    /* Ensure primary mt6789_flash node has write permissions if present */
+    sys_chmod(MT6789_FLASH_NODE, 0666);
+
+    const struct torch_target *target = find_torch_target();
+    if (!target) {
+        log_msg("tanzanite-flashlight: no writable torch node found\n");
         return -1;
     }
 
-    for (int i = 0; torch_formats[i]; i++) {
-        FILE *tf = fopen(node, "w");
-        if (!tf) {
-            syslog(LOG_WARNING, "cannot open %s: %s", node, strerror(errno));
-            return -1;
-        }
-        fprintf(tf, torch_formats[i], on ? 1 : 0);
-        if (fclose(tf) == 0)
-            return 0;
-        syslog(LOG_WARNING, "write failed on %s: %s", node, strerror(errno));
+    int fd = sys_open(target->path, O_WRONLY, 0);
+    if (fd < 0) {
+        log_msg("tanzanite-flashlight: failed to open torch node\n");
+        return -1;
     }
-    return -1;
+
+    const char *payload = on ? target->on_str : target->off_str;
+    size_t len = str_len(payload);
+    ssize_t written = sys_write(fd, payload, len);
+    sys_close(fd);
+
+    if (written < (ssize_t)len) {
+        log_msg("tanzanite-flashlight: failed to write torch state\n");
+        return -1;
+    }
+
+    return 0;
 }
 
-static void sync_torch(void) {
-    FILE *bf = fopen(BRIDGE_FILE, "r");
-    if (!bf) {
-        syslog(LOG_WARNING, "cannot read %s: %s", BRIDGE_FILE, strerror(errno));
+static void sync_torch(int *last_state) {
+    int fd = sys_open(BRIDGE_FILE, O_RDONLY, 0);
+    if (fd < 0)
         return;
+
+    char buf[32];
+    ssize_t n = sys_read(fd, buf, sizeof(buf) - 1);
+    sys_close(fd);
+
+    if (n <= 0)
+        return;
+    buf[n] = '\0';
+
+    int i = 0;
+    while (buf[i] == ' ' || buf[i] == '\t' || buf[i] == '\r' || buf[i] == '\n')
+        i++;
+
+    int on = -1;
+    if (buf[i] == '0')
+        on = 0;
+    else if (buf[i] >= '1' && buf[i] <= '9')
+        on = 1;
+
+    if (on < 0 || on == *last_state)
+        return;
+
+    if (set_torch(on) == 0) {
+        *last_state = on;
+        log_msg(on ? "tanzanite-flashlight: torch -> on\n"
+                   : "tanzanite-flashlight: torch -> off\n");
     }
-    char buf[32] = {0};
-    if (fgets(buf, sizeof(buf), bf)) {
-        int val = 0;
-        if (sscanf(buf, "%d", &val) == 1) {
-            if (set_torch(val > 0) == 0)
-                syslog(LOG_INFO, "torch -> %s", val > 0 ? "on" : "off");
-        }
-    }
-    fclose(bf);
-    /* ayatana writes as the desktop user; keep the node world-writable so the
-     * next toggle works without a permission error. */
-    chmod(BRIDGE_FILE, 0666);
 }
 
 int main(void) {
-    openlog("tanzanite-flashlight", LOG_PID, LOG_DAEMON);
+    sys_chmod(MT6789_FLASH_NODE, 0666);
 
-    int fd = open(BRIDGE_FILE, O_CREAT | O_RDWR, 0666);
+    int fd = sys_open(BRIDGE_FILE, O_CREAT | O_RDWR | O_TRUNC, 0666);
     if (fd < 0) {
-        syslog(LOG_ERR, "cannot create %s: %s", BRIDGE_FILE, strerror(errno));
+        log_msg("tanzanite-flashlight: cannot create /run/flashlight_bridge\n");
         return 1;
     }
-    if (write(fd, "0\n", 2) < 0)
-        syslog(LOG_WARNING, "cannot initialise %s: %s", BRIDGE_FILE, strerror(errno));
-    close(fd);
-    chmod(BRIDGE_FILE, 0666);
+    sys_write(fd, "0\n", 2);
+    sys_close(fd);
+    sys_chmod(BRIDGE_FILE, 0666);
 
-    if (!find_torch_node())
-        syslog(LOG_WARNING,
-               "torch node missing at start-up; the flashlight driver is probably not loaded. "
-               "The bridge will keep watching and retry on each toggle.");
+    if (!find_torch_target()) {
+        log_msg("tanzanite-flashlight: torch node missing at start-up; will retry on toggle\n");
+    }
 
-    int inotify_fd = inotify_init();
+    int inotify_fd = sys_inotify_init();
     if (inotify_fd < 0) {
-        syslog(LOG_ERR, "inotify_init failed: %s", strerror(errno));
+        log_msg("tanzanite-flashlight: inotify_init failed\n");
         return 1;
     }
 
-    inotify_add_watch(inotify_fd, "/run", IN_CLOSE_WRITE | IN_MOVED_TO);
-    inotify_add_watch(inotify_fd, BRIDGE_FILE, IN_CLOSE_WRITE | IN_MODIFY);
+    int wd_dir = sys_inotify_add_watch(inotify_fd, "/run", IN_CREATE | IN_MOVED_TO);
+    int wd_file = sys_inotify_add_watch(inotify_fd, BRIDGE_FILE, IN_CLOSE_WRITE | IN_MODIFY);
 
-    sync_torch();
+    int last_state = -1;
+    sync_torch(&last_state);
 
-    char buf[4096] __attribute__ ((aligned(__alignof__(struct inotify_event))));
+    char buf[4096] __attribute__((aligned(__alignof__(struct inotify_event))));
     for (;;) {
-        ssize_t len = read(inotify_fd, buf, sizeof(buf));
+        ssize_t len = sys_read(inotify_fd, buf, sizeof(buf));
         if (len <= 0) {
-            if (len < 0 && errno == EINTR) continue;
-            syslog(LOG_ERR, "inotify read failed: %s", strerror(errno));
+            if (len == -4 /* -EINTR */)
+                continue;
+            log_msg("tanzanite-flashlight: inotify read failed\n");
             break;
         }
-        sync_torch();
+
+        int should_sync = 0;
+        ssize_t offset = 0;
+        while (offset < len) {
+            struct inotify_event *ev = (struct inotify_event *)(buf + offset);
+            if (ev->wd == wd_file) {
+                should_sync = 1;
+            } else if (ev->wd == wd_dir && ev->len > 0 && str_eq(ev->name, "flashlight_bridge")) {
+                sys_chmod(BRIDGE_FILE, 0666);
+                wd_file = sys_inotify_add_watch(inotify_fd, BRIDGE_FILE, IN_CLOSE_WRITE | IN_MODIFY);
+                should_sync = 1;
+            }
+            offset += (ssize_t)sizeof(struct inotify_event) + (ssize_t)ev->len;
+        }
+
+        if (should_sync)
+            sync_torch(&last_state);
     }
 
-    close(inotify_fd);
-    closelog();
+    sys_close(inotify_fd);
     return 0;
 }
+
+#if defined(__aarch64__) && !__STDC_HOSTED__
+__attribute__((noreturn)) void _start(void) {
+    int ret = main();
+    syscall1(SYS_exit_group, ret);
+    __builtin_unreachable();
+}
+#endif

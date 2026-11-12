@@ -1,0 +1,80 @@
+#!/bin/sh
+
+# MediaTek MT6789 (tanzanite) Modem and Telephony Initialization Sequence
+# Uses GSM 07.10 MUX (gsm0710muxd on /dev/ttyC0 -> /dev/radio/ptty*)
+# NOTE: Do NOT set ro.vendor.mtk_mipc_support on this device.
+
+# 1. Wait for Android property service (max 10s)
+for i in $(seq 1 50); do
+    [ -e /dev/socket/property_service ] && break
+    sleep 0.2
+done
+
+# 2. Ensure /dev/radio directory exists with radio:radio ownership
+mkdir -p /dev/radio
+chown 1001:1001 /dev/radio 2>/dev/null || true
+chmod 770 /dev/radio 2>/dev/null || true
+
+# 3. Start NVRAM daemons and wait for NVRAM initialization
+getprop init.svc.nvram_daemon | grep -q running || setprop ctl.start nvram_daemon
+getprop init.svc.nvram-hidl-1-1 | grep -q running || setprop ctl.start nvram-hidl-1-1
+for i in $(seq 1 50); do
+    [ "$(getprop vendor.service.nvram_init)" = "Ready" ] && break
+    sleep 0.2
+done
+
+# 4. Start CCCI RPC and MDINIT services
+getprop init.svc.vendor.ccci_rpcd | grep -q running || setprop ctl.start vendor.ccci_rpcd
+getprop init.svc.ccci_mdinit | grep -q running || setprop ctl.start ccci_mdinit
+
+# 5. Wait for Modem CCCI state to reach READY (md1:4) (max 180s)
+echo "[mtk-modem] Waiting for modem to reach md1:4 (READY)..."
+for i in $(seq 1 360); do
+    if [ -f /sys/kernel/ccci/boot ]; then
+        chown 1001:1001 /sys/kernel/ccci/boot 2>/dev/null || true
+        chmod 666 /sys/kernel/ccci/boot 2>/dev/null || true
+        grep -q "md1:4" /sys/kernel/ccci/boot && break
+    fi
+    sleep 0.5
+done
+
+if ! grep -q "md1:4" /sys/kernel/ccci/boot 2>/dev/null; then
+    echo "[mtk-modem] ERROR: modem did not reach READY state within 180s"
+    exit 1
+fi
+echo "[mtk-modem] Modem reached READY state (md1:4)"
+
+# 6. Ensure CCCI TTY permissions and start gsm0710muxd
+chown 1001:1001 /dev/ttyC* 2>/dev/null || true
+chmod 660 /dev/ttyC* 2>/dev/null || true
+
+echo "[mtk-modem] Ensuring vendor.gsm0710muxd is running..."
+getprop init.svc.vendor.gsm0710muxd | grep -q running || setprop ctl.start vendor.gsm0710muxd
+
+# 7. Wait for gsm0710muxd to populate /dev/radio/pttycmd1 and trigger vendor.ril.mtk=1 (max 30s)
+echo "[mtk-modem] Waiting for /dev/radio/pttycmd1..."
+for i in $(seq 1 60); do
+    if [ -L /dev/radio/pttycmd1 ] || [ -e /dev/radio/pttycmd1 ]; then
+        break
+    fi
+    sleep 0.5
+done
+
+# 8. Ensure vendor.ril-daemon-mtk is running
+echo "[mtk-modem] Ensuring vendor.ril-daemon-mtk is running..."
+getprop init.svc.vendor.ril-daemon-mtk | grep -q running || setprop ctl.start vendor.ril-daemon-mtk
+
+for i in $(seq 1 40); do
+    getprop init.svc.vendor.ril-daemon-mtk | grep -q running && break
+    sleep 0.5
+done
+
+# Give mtkfusionrild time to open MUX channels and register HIDL IRadio services
+sleep 5
+
+# 9. Restart oFono once Modem, MUX, and RIL are ready
+echo "[mtk-modem] Restarting ofono..."
+systemctl restart --no-block ofono || true
+
+echo "[mtk-modem] Initialization complete"
+exit 0

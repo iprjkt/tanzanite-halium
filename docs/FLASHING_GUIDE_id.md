@@ -79,10 +79,10 @@ Panduan langkah demi langkah untuk menginstal **Ubuntu Touch 20.04 (Focal Fossa)
 5. Proses instalasi akan berjalan secara otomatis:
    - Mem-patch `/vendor/etc/fstab.mt6789` untuk mengarahkan userdata ke ext4 tanpa enkripsi.
    - Menonaktifkan verifikasi AVB dan dm-verity pada `vbmeta`, `vbmeta_system`, dan `vbmeta_vendor`.
-   - Membuat cadangan partisi `boot`, `vendor_boot`, dan `dtbo` bawaan ke `/sdcard/.backup/`.
+   - Membuat cadangan partisi `boot` bawaan ke `/sdcard/.backup/` serta mempertahankan `vendor_boot` (recovery) dan `dtbo` bawaan.
    - Mengekstrak rootfs Ubuntu Touch dan container Halium ke `/data/ubuntu`.
    - Memasang driver tampilan HWC2, konfigurasi audio, udev rules, dan pengaturan sandboxing `apt`.
-   - Mem-flash image kernel Halium (`boot`, `vendor_boot`, `dtbo`) ke Slot A.
+   - Mem-flash image kernel Halium (`boot.img`) ke Slot A.
 
 ### Langkah 5: Booting Pertama ke Ubuntu Touch
 1. Setelah pesan `Patching completed successfully!` muncul, pilih **Reboot System**.

@@ -79,10 +79,10 @@ Step-by-step installation guide for setting up **Ubuntu Touch 20.04 (Focal Fossa
 5. The installer will execute the following steps automatically:
    - Patches `/vendor/etc/fstab.mt6789` to mount userdata as unencrypted ext4.
    - Disables AVB verification and dm-verity on `vbmeta`, `vbmeta_system`, and `vbmeta_vendor`.
-   - Backs up stock `boot`, `vendor_boot`, and `dtbo` partitions to `/sdcard/.backup/`.
+   - Backs up stock `boot` partition to `/sdcard/.backup/` while leaving `vendor_boot` (recovery) and `dtbo` untouched.
    - Extracts Ubuntu Touch rootfs and the Halium container into `/data/ubuntu`.
    - Deploys HWC2 display platform drivers (`mir-android2`), audio routing, udev rules, and `apt` sandboxing configuration.
-   - Flashes the Halium kernel (`boot`, `vendor_boot`, `dtbo`) into Slot A.
+   - Flashes the Halium kernel (`boot.img`) into Slot A.
 
 ### Step 5: Initial Boot into Ubuntu Touch
 1. Once the terminal displays `Patching completed successfully!`, select **Reboot System**.

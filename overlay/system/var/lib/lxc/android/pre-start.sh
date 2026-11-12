@@ -16,4 +16,5 @@ if [ -w $LXC_ROOTFS_PATH ]; then
 fi
 
 # Make sure bind-mount-points are available.
+rm -rf /dev/__properties__/*
 mkdir -p /dev/__properties__ /dev/socket

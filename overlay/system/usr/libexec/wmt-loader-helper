@@ -1,0 +1,12 @@
+#!/bin/sh
+# Ensure wmt_drv is loaded first so /dev/wmtdetect and /dev/stpwmt exist
+/usr/sbin/modprobe wmt_drv 2>/dev/null || true
+
+# Execute wmt_loader inside container
+/usr/bin/lxc-attach -n android -- /vendor/bin/wmt_loader
+
+# Wait for driver ready
+for i in $(seq 1 50); do
+    [ "$(/usr/bin/lxc-attach -n android -- /system/bin/getprop vendor.connsys.driver.ready 2>/dev/null)" = "yes" ] && break
+    sleep 0.1
+done

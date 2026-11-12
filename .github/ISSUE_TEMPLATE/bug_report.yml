@@ -7,7 +7,7 @@ body:
       value: |
         A report without logs usually cannot be acted on. Please fill everything below.
 
-        Read `docs/MODULE_AUDIT.md` and `docs/BOOTLOADER.md` first — they cover the two
+        Read `docs/MODULE_AUDIT.md` and `docs/BOOTLOADER_AVB_LK.md` first - they cover the two
         failure classes this port has actually hit.
 
   - type: input

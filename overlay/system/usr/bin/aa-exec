@@ -1,0 +1,32 @@
+#!/bin/bash
+if [ -d /sys/kernel/security/apparmor ] && [ -x /usr/bin/aa-exec.real ]; then
+    exec /usr/bin/aa-exec.real "$@"
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -p|--profile|-n|--namespace)
+            shift 2
+            ;;
+        -d|--debug|-i|--immediate|-v|--verbose)
+            shift 1
+            ;;
+        --)
+            shift 1
+            break
+            ;;
+        -*)
+            shift 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [ ! -S "$MIR_SOCKET" ] && [ -S "/run/user/32011/mir_socket" ]; then
+    export MIR_SOCKET="/run/user/32011/mir_socket"
+    export XDG_RUNTIME_DIR="/run/user/32011"
+fi
+
+exec "$@"

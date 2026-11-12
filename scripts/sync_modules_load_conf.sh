@@ -34,6 +34,10 @@ EXTRA=(
     # zram swap is configured by the rootfs, after /data is mounted
     zram
     zsmalloc
+    # Bluetooth Connsys STP driver, virtual HCI bridge, and BNEP
+    bt_drv_connac1x
+    hci_vhci
+    bnep
 )
 
 cd "$MODDIR"

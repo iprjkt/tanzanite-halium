@@ -66,10 +66,6 @@ find_part() {
       return 0
     fi
   done
-  case "$name" in
-    lk_a) [ -e "/dev/block/sdc31" ] && echo "/dev/block/sdc31" && return 0 ;;
-    lk_b) [ -e "/dev/block/sdc55" ] && echo "/dev/block/sdc55" && return 0 ;;
-  esac
   return 1
 }
 
@@ -425,16 +421,14 @@ else
 fi
 sync
 
-# 9. Extract Partition Images & Handle Bootloader Security (LK Fenrir & Preloader Engineering)
+# 9. Extract Partition Images & Handle Bootloader Security (Preloader Engineering)
 ui_print "[*] Extracting partition images from installer zip..."
 unzip -o "$ZIPFILE" "partitions/*" -d "$WORK" >/dev/null 2>&1
-for p in boot vendor_boot dtbo; do
-  [ -s "$WORK/partitions/${p}.img" ] || abort "Extracted Halium $p.img is missing or empty!"
-  [ -e "/dev/block/by-name/${p}${SLOT}" ] || abort "Target partition /dev/block/by-name/${p}${SLOT} not found!"
-done
+[ -s "$WORK/partitions/boot.img" ] || abort "Extracted Halium boot.img is missing or empty!"
+[ -e "/dev/block/by-name/boot${SLOT}" ] || abort "Target partition /dev/block/by-name/boot${SLOT} not found!"
 
 # Tanzanite Kernel Safety & Version Validation (STRICT: Only Linux 5.10.xxx is supported)
-# Flashing this Halium build, LK Fenrir, or Preloader Eng on kernel 6.12.xxx firmware WILL HARDBRICK the device!
+# Flashing this Halium build or Preloader Eng on kernel 6.12.xxx firmware WILL HARDBRICK the device!
 ui_print "=============================================="
 ui_print " Tanzanite Kernel Safety & Version Validation "
 ui_print "=============================================="
@@ -473,7 +467,7 @@ if [ -n "$ACTIVE_KERNEL_VER" ]; then
       ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
       ui_print "[!] FATAL: DEVICE IS RUNNING LINUX KERNEL 6.12.xxx!"
       ui_print "[!] Flashing this port onto a 6.12 baseline WILL HARDBRICK the device."
-      ui_print "[!] MediaTek preloader, LK Fenrir, and vendor blobs require kernel 5.10."
+      ui_print "[!] MediaTek preloader and vendor blobs require kernel 5.10."
       ui_print "[!] Please downgrade your stock firmware to Android 12-14 (Kernel 5.10) first!"
       ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
       abort "Installation aborted to prevent a permanent device hardbrick."
@@ -488,39 +482,24 @@ if [ -n "$ACTIVE_KERNEL_VER" ]; then
   esac
 fi
 
-# Flash LK Fenrir and Preloader Engineering to BOTH slots (with smart hash verification & skip confirmation)
-LK_IMG="$WORK/partitions/lk_fenrir.img"
+# Flash Preloader Engineering to BOTH slots (with smart hash verification & skip confirmation)
 PL_IMG="$WORK/partitions/preloader_eng.bin"
 
-if [ -f "$LK_IMG" ] && [ -f "$PL_IMG" ]; then
+if [ -f "$PL_IMG" ]; then
   ui_print "=============================================="
-  ui_print " MT6789 Bootloader Security: LK Fenrir & Preloader "
+  ui_print " MT6789 Bootloader Security: Preloader Eng    "
   ui_print "=============================================="
 
-  TARGET_LK_A=$(find_part lk_a || echo "/dev/block/by-name/lk_a")
-  TARGET_LK_B=$(find_part lk_b || echo "/dev/block/by-name/lk_b")
   TARGET_PL_A=$(find_preloader_part a || echo "/dev/block/by-name/preloader_raw_a")
   TARGET_PL_B=$(find_preloader_part b || echo "/dev/block/by-name/preloader_raw_b")
 
-  LK_SIZE=$("$BB" wc -c < "$LK_IMG" | tr -d ' \r\n')
   PL_SIZE=$("$BB" wc -c < "$PL_IMG" | tr -d ' \r\n')
-
-  EXPECTED_LK_SHA=$("$BB" sha256sum "$LK_IMG" | cut -d' ' -f1)
   EXPECTED_PL_SHA=$("$BB" sha256sum "$PL_IMG" | cut -d' ' -f1)
 
-  ui_print "[*] Verifying existing bootloader hashes across both slots..."
+  ui_print "[*] Verifying existing preloader hashes across both slots..."
 
-  CURR_LK_A_SHA=""
-  CURR_LK_B_SHA=""
   CURR_PL_A_SHA=""
   CURR_PL_B_SHA=""
-
-  if [ -e "$TARGET_LK_A" ]; then
-    CURR_LK_A_SHA=$(dd if="$TARGET_LK_A" bs=4096 count=$(( (LK_SIZE + 4095) / 4096 )) 2>/dev/null | head -c "$LK_SIZE" | "$BB" sha256sum | cut -d' ' -f1)
-  fi
-  if [ -e "$TARGET_LK_B" ]; then
-    CURR_LK_B_SHA=$(dd if="$TARGET_LK_B" bs=4096 count=$(( (LK_SIZE + 4095) / 4096 )) 2>/dev/null | head -c "$LK_SIZE" | "$BB" sha256sum | cut -d' ' -f1)
-  fi
 
   if [ -e "$TARGET_PL_A" ]; then
     if [ "$TARGET_PL_A" = "/dev/block/sda" ]; then
@@ -538,18 +517,14 @@ if [ -f "$LK_IMG" ] && [ -f "$PL_IMG" ]; then
     fi
   fi
 
-  LK_A_OK=0; [ "$CURR_LK_A_SHA" = "$EXPECTED_LK_SHA" ] && LK_A_OK=1
-  LK_B_OK=0; [ "$CURR_LK_B_SHA" = "$EXPECTED_LK_SHA" ] && LK_B_OK=1
   PL_A_OK=0; [ "$CURR_PL_A_SHA" = "$EXPECTED_PL_SHA" ] && PL_A_OK=1
   PL_B_OK=0; [ "$CURR_PL_B_SHA" = "$EXPECTED_PL_SHA" ] && PL_B_OK=1
 
-  [ "$LK_A_OK" -eq 1 ] && ui_print "    [+] lk_a            : LK Fenrir verified" || ui_print "    [-] lk_a            : Stock or outdated"
-  [ "$LK_B_OK" -eq 1 ] && ui_print "    [+] lk_b            : LK Fenrir verified" || ui_print "    [-] lk_b            : Stock or outdated"
   [ "$PL_A_OK" -eq 1 ] && ui_print "    [+] preloader slot A: Preloader Eng verified" || ui_print "    [-] preloader slot A: Stock or outdated"
   [ "$PL_B_OK" -eq 1 ] && ui_print "    [+] preloader slot B: Preloader Eng verified" || ui_print "    [-] preloader slot B: Stock or outdated"
 
   ALL_BOOTLOADER_MATCH=0
-  if [ "$LK_A_OK" -eq 1 ] && [ "$LK_B_OK" -eq 1 ] && [ "$PL_A_OK" -eq 1 ] && [ "$PL_B_OK" -eq 1 ]; then
+  if [ "$PL_A_OK" -eq 1 ] && [ "$PL_B_OK" -eq 1 ]; then
     ALL_BOOTLOADER_MATCH=1
   fi
 
@@ -564,8 +539,8 @@ if [ -f "$LK_IMG" ] && [ -f "$PL_IMG" ]; then
 
   ACTION_FLASH_BOOTLOADER=1
   if [ "$ALL_BOOTLOADER_MATCH" -eq 1 ]; then
-    ui_print "[+] LK Fenrir & Preloader Eng are ALREADY up to date on both slots!"
-    ui_print "[?] Skip flashing bootloader? (Default: SKIP in 5s)"
+    ui_print "[+] Preloader Eng is ALREADY up to date on both slots!"
+    ui_print "[?] Skip flashing preloader? (Default: SKIP in 5s)"
     ui_print "    -> Press Volume UP within 5s to FORCE RE-FLASH"
     ui_print "    -> Press Volume DOWN or wait 5s to SKIP"
 
@@ -584,12 +559,12 @@ if [ -f "$LK_IMG" ] && [ -f "$PL_IMG" ]; then
       ui_print "[!] Volume UP pressed: Force re-flashing both slots..."
       ACTION_FLASH_BOOTLOADER=1
     else
-      ui_print "[+] Skipping bootloader flashing (already up to date)."
+      ui_print "[+] Skipping preloader flashing (already up to date)."
       ACTION_FLASH_BOOTLOADER=0
     fi
   else
-    ui_print "[!] Bootloader security is NOT fully installed on both slots."
-    ui_print "[?] Flash LK Fenrir & Preloader Eng to BOTH slots? (Default: FLASH in 5s)"
+    ui_print "[!] Preloader Eng is NOT fully installed on both slots."
+    ui_print "[?] Flash Preloader Eng to BOTH slots? (Default: FLASH in 5s)"
     ui_print "    -> Press Volume UP within 5s to SKIP"
     ui_print "    -> Press Volume DOWN or wait 5s to FLASH"
 
@@ -605,27 +580,15 @@ if [ -f "$LK_IMG" ] && [ -f "$PL_IMG" ]; then
     fi
 
     if [ "$KEY_PRESSED" = "UP" ]; then
-      ui_print "[!] Volume UP pressed: User chose to SKIP bootloader flashing."
+      ui_print "[!] Volume UP pressed: User chose to SKIP preloader flashing."
       ACTION_FLASH_BOOTLOADER=0
     else
-      ui_print "[+] Proceeding to flash LK Fenrir & Preloader Eng to BOTH slots..."
+      ui_print "[+] Proceeding to flash Preloader Eng to BOTH slots..."
       ACTION_FLASH_BOOTLOADER=1
     fi
   fi
 
   if [ "$ACTION_FLASH_BOOTLOADER" -eq 1 ]; then
-    ui_print "[*] Flashing LK Fenrir to both slots..."
-    if [ -n "$TARGET_LK_A" ] && [ -e "$TARGET_LK_A" ]; then
-      blockdev --setrw "$TARGET_LK_A" 2>/dev/null || true
-      dd if="$LK_IMG" of="$TARGET_LK_A" bs=4M
-      ui_print "    [+] Flashed lk_a <- LK Fenrir"
-    fi
-    if [ -n "$TARGET_LK_B" ] && [ -e "$TARGET_LK_B" ]; then
-      blockdev --setrw "$TARGET_LK_B" 2>/dev/null || true
-      dd if="$LK_IMG" of="$TARGET_LK_B" bs=4M
-      ui_print "    [+] Flashed lk_b <- LK Fenrir"
-    fi
-
     ui_print "[*] Flashing Preloader Engineering to both slots..."
     if [ -n "$TARGET_PL_A" ] && [ -e "$TARGET_PL_A" ]; then
       blockdev --setrw "$TARGET_PL_A" 2>/dev/null || true
@@ -646,19 +609,17 @@ if [ -f "$LK_IMG" ] && [ -f "$PL_IMG" ]; then
       ui_print "    [+] Flashed preloader slot B ($TARGET_PL_B) <- Preloader Eng"
     fi
     sync
-    ui_print "[+] Bootloader security bypass active on both slots A & B."
+    ui_print "[+] Preloader Engineering active on both slots A & B."
   fi
 fi
 
-# 10. Backup Stock Boot Partitions and Provision Rootfs
+# 10. Backup Stock Boot Partition and Provision Rootfs
 
-# Backup current slot boot/vendor_boot/dtbo to $WORK/stock_backup before overwriting
+# Backup current slot boot to $WORK/stock_backup before overwriting
 mkdir -p "$WORK/stock_backup"
-ui_print "[*] Backing up current slot ($SLOT) boot, vendor_boot, and dtbo..."
-for p in boot vendor_boot dtbo; do
-  dd if="/dev/block/by-name/${p}${SLOT}" of="$WORK/stock_backup/${p}_stock.img" bs=4M
-  [ -s "$WORK/stock_backup/${p}_stock.img" ] || abort "Failed to backup /dev/block/by-name/${p}${SLOT}!"
-done
+ui_print "[*] Backing up current slot ($SLOT) boot..."
+dd if="/dev/block/by-name/boot${SLOT}" of="$WORK/stock_backup/boot_stock.img" bs=4M
+[ -s "$WORK/stock_backup/boot_stock.img" ] || abort "Failed to backup /dev/block/by-name/boot${SLOT}!"
 
 USERDATA_PART="/dev/block/by-name/userdata"
 if [ -e "$USERDATA_PART" ]; then
@@ -673,18 +634,14 @@ if [ -e "$USERDATA_PART" ]; then
     mkdir -p /data/ubuntu
     ln -sf ubuntu /data/halium-rootfs 2>/dev/null || true
 
-    # Secure Halium & Stock boot/vendor_boot/dtbo backups early before rootfs extraction
+    # Secure Halium & Stock boot backups early before rootfs extraction
     BACKUP_DIR="/data/media/0/.backup"
     mkdir -p "$BACKUP_DIR" 2>/dev/null || true
     cp -f "$WORK/partitions/boot.img" "$BACKUP_DIR/boot_halium.img" 2>/dev/null || true
-    cp -f "$WORK/partitions/vendor_boot.img" "$BACKUP_DIR/vendor_boot_halium.img" 2>/dev/null || true
-    cp -f "$WORK/partitions/dtbo.img" "$BACKUP_DIR/dtbo_halium.img" 2>/dev/null || true
 
-    for p in boot vendor_boot dtbo; do
-      if [ -s "$WORK/stock_backup/${p}_stock.img" ]; then
-        [ -s "$BACKUP_DIR/${p}_stock.img" ] || cp -f "$WORK/stock_backup/${p}_stock.img" "$BACKUP_DIR/${p}_stock.img" 2>/dev/null || true
-      fi
-    done
+    if [ -s "$WORK/stock_backup/boot_stock.img" ]; then
+      [ -s "$BACKUP_DIR/boot_stock.img" ] || cp -f "$WORK/stock_backup/boot_stock.img" "$BACKUP_DIR/boot_stock.img" 2>/dev/null || true
+    fi
     ui_print "[+] Secured kernel backups in $BACKUP_DIR"
 
     # Check if a valid Ubuntu Touch rootfs is already installed
@@ -824,24 +781,18 @@ if [ -e "$USERDATA_PART" ]; then
     if [ -d "/sdcard" ] && mountpoint -q /sdcard 2>/dev/null; then
       mkdir -p "/sdcard/.backup"
       cp -f "$WORK/partitions/boot.img" "/sdcard/.backup/boot_halium.img"
-      cp -f "$WORK/partitions/vendor_boot.img" "/sdcard/.backup/vendor_boot_halium.img"
-      cp -f "$WORK/partitions/dtbo.img" "/sdcard/.backup/dtbo_halium.img"
-      for p in boot vendor_boot dtbo; do
-        [ -s "/sdcard/.backup/${p}_stock.img" ] || cp -f "$WORK/stock_backup/${p}_stock.img" "/sdcard/.backup/${p}_stock.img"
-      done
+      [ -s "/sdcard/.backup/boot_stock.img" ] || cp -f "$WORK/stock_backup/boot_stock.img" "/sdcard/.backup/boot_stock.img"
     fi
   fi
 fi
 
-# 11. Flash Halium boot and dtbo to active slot (preserve vendor_boot for OrangeFox recovery)
-ui_print "[*] Flashing Halium boot and dtbo to slot $SLOT..."
-for p in boot dtbo; do
-  TARGET_PART="/dev/block/by-name/${p}${SLOT}"
-  blockdev --setrw "$TARGET_PART" 2>/dev/null || true
-  dd if="$WORK/partitions/${p}.img" of="$TARGET_PART" bs=4M
-  ui_print "    [+] Flashed ${p}${SLOT} <- Halium ${p}.img"
-done
-ui_print "[*] Preserved vendor_boot${SLOT} (maintains OrangeFox recovery ramdisk)"
+# 11. Flash Halium boot to active slot (preserve vendor_boot and dtbo)
+ui_print "[*] Flashing Halium boot to slot $SLOT..."
+TARGET_PART="/dev/block/by-name/boot${SLOT}"
+blockdev --setrw "$TARGET_PART" 2>/dev/null || true
+dd if="$WORK/partitions/boot.img" of="$TARGET_PART" bs=4M
+ui_print "    [+] Flashed boot${SLOT} <- Halium boot.img"
+ui_print "[*] Preserved vendor_boot${SLOT} and dtbo${SLOT}"
 sync
 
 rm -rf "$WORK"

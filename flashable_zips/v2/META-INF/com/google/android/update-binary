@@ -54,6 +54,66 @@ export PATH="$WORK/tools:$PATH"
 
 BB="$WORK/tools/busybox"
 
+find_part() {
+  local name="$1"
+  for cand in \
+    "/dev/block/by-name/$name" \
+    "/dev/block/platform/soc/11270000.ufshci/by-name/$name" \
+    "/dev/block/platform/bootdevice/by-name/$name" \
+    "/dev/block/mapper/$name"; do
+    if [ -e "$cand" ]; then
+      echo "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+find_preloader_part() {
+  local slot="$1"
+  if [ -e "/dev/block/by-name/preloader_raw_${slot}" ]; then
+    echo "/dev/block/by-name/preloader_raw_${slot}"
+  elif [ -e "/dev/block/mapper/pl_${slot}" ]; then
+    echo "/dev/block/mapper/pl_${slot}"
+  elif [ -e "/dev/block/by-name/preloader_${slot}" ]; then
+    echo "/dev/block/by-name/preloader_${slot}"
+  elif [ "$slot" = "a" ] && [ -e "/dev/block/sda" ]; then
+    echo "/dev/block/sda"
+  elif [ "$slot" = "b" ] && [ -e "/dev/block/sdb" ]; then
+    echo "/dev/block/sdb"
+  fi
+}
+
+extract_kernel_ver() {
+  local target="$1"
+  local ver=""
+  local decomp=""
+
+  if [ -x "$BB" ]; then
+    decomp="$BB zcat"
+  elif command -v zcat >/dev/null 2>&1; then
+    decomp="zcat"
+  else
+    decomp="gzip -dc"
+  fi
+
+  # 1. Decompressed gzip stream (Android boot v4 kernel at offset 4096)
+  ver=$(dd if="$target" bs=4096 skip=1 count=4096 2>/dev/null | $decomp 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)
+  if [ -n "$ver" ]; then
+    echo "$ver"
+    return 0
+  fi
+
+  # 2. Raw uncompressed image check
+  ver=$(dd if="$target" bs=4096 count=4096 2>/dev/null | strings 2>/dev/null | grep -m1 "Linux version [0-9]" | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)
+  if [ -n "$ver" ]; then
+    echo "$ver"
+    return 0
+  fi
+
+  return 1
+}
+
 # 1. Detect Active Slot Dynamically
 SLOT=$(getprop ro.boot.slot_suffix 2>/dev/null || true)
 if [ -z "$SLOT" ]; then
@@ -85,7 +145,9 @@ elif [ -e "/dev/block/by-name/super" ]; then
   [ -e "/dev/block/mapper/vendor${SLOT}" ] && VENDOR_PART="/dev/block/mapper/vendor${SLOT}"
 fi
 
-[ -n "$VENDOR_PART" ] && [ -e "$VENDOR_PART" ] || abort "Vendor partition for slot $SLOT not found!"
+if [ -z "$VENDOR_PART" ] || [ ! -e "$VENDOR_PART" ]; then
+  abort "Vendor partition for slot $SLOT not found!"
+fi
 umount -fl "$VENDOR_PART" 2>/dev/null || true
 blockdev --setrw "$VENDOR_PART" 2>/dev/null || true
 
@@ -263,7 +325,6 @@ else
     ui_print "[*] Repacked EROFS size: $NEW_SIZE bytes (limit: $ORIG_SIZE bytes)"
     if [ "$NEW_SIZE" -gt "$ORIG_SIZE" ]; then
       ui_print "[!] Repacked image ($NEW_SIZE bytes) exceeds partition size ($ORIG_SIZE bytes)."
-      RESIZED=false
       if [ -e "/dev/block/by-name/super" ] && [ -x "$WORK/tools/lptools" ]; then
         ui_print "[*] Expanding dynamic partition vendor${SLOT} via lptools..."
 
@@ -278,15 +339,18 @@ else
         "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --unmap "vendor${SLOT}" 2>/dev/null || true
 
         # Resize partition in super metadata
-        if "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --resize "vendor${SLOT}" "$TARGET_SIZE" 2>&1; then
-          RESIZED=true
-        elif "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --unlimited-group --resize "vendor${SLOT}" "$TARGET_SIZE" 2>&1; then
-          RESIZED=true
-        elif "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --resize "vendor${SLOT}" "$TARGET_SIZE" 2>&1; then
-          RESIZED=true
-        elif "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --resize "vendor" "$TARGET_SIZE" 2>&1; then
-          RESIZED=true
-        fi
+        # Try the known lptools invocations in order. The resulting partition size is
+        # compared against TARGET_SIZE below, which is the authoritative check.
+        for attempt in \
+            "--suffix $SLOT --resize vendor${SLOT}" \
+            "--suffix $SLOT --unlimited-group --resize vendor${SLOT}" \
+            "--resize vendor${SLOT}" \
+            "--suffix $SLOT --resize vendor"; do
+          if "$WORK/tools/lptools" --super /dev/block/by-name/super \
+              --slot "$SLOT_NUM" $attempt "$TARGET_SIZE" 2>&1; then
+            break
+          fi
+        done
 
         # Remap partition to update device-mapper table in kernel
         "$WORK/tools/lptools" --super /dev/block/by-name/super --slot "$SLOT_NUM" --suffix "$SLOT" --map "vendor${SLOT}" || true
@@ -357,21 +421,205 @@ else
 fi
 sync
 
-# 9. Backup Stock Boot Partitions, Extract & Flash Halium Boot Partitions, and Provision Rootfs
-ui_print "[*] Extracting Halium boot, vendor_boot, and dtbo images..."
+# 9. Extract Partition Images & Handle Bootloader Security (Preloader Engineering)
+ui_print "[*] Extracting partition images from installer zip..."
 unzip -o "$ZIPFILE" "partitions/*" -d "$WORK" >/dev/null 2>&1
-for p in boot vendor_boot dtbo; do
-  [ -s "$WORK/partitions/${p}.img" ] || abort "Extracted Halium $p.img is missing or empty!"
-  [ -e "/dev/block/by-name/${p}${SLOT}" ] || abort "Target partition /dev/block/by-name/${p}${SLOT} not found!"
-done
+[ -s "$WORK/partitions/boot.img" ] || abort "Extracted Halium boot.img is missing or empty!"
+[ -e "/dev/block/by-name/boot${SLOT}" ] || abort "Target partition /dev/block/by-name/boot${SLOT} not found!"
 
-# Backup current slot boot/vendor_boot/dtbo to $WORK/stock_backup before overwriting
+# Tanzanite Kernel Safety & Version Validation (STRICT: Only Linux 5.10.xxx is supported)
+# Flashing this Halium build or Preloader Eng on kernel 6.12.xxx firmware WILL HARDBRICK the device!
+ui_print "=============================================="
+ui_print " Tanzanite Kernel Safety & Version Validation "
+ui_print "=============================================="
+
+# 1. Validate Target Halium Kernel in boot.img
+HALIUM_KERNEL_VER=$(extract_kernel_ver "$WORK/partitions/boot.img" || true)
+if [ -n "$HALIUM_KERNEL_VER" ]; then
+  ui_print "[*] Target Halium kernel version: $HALIUM_KERNEL_VER"
+  case "$HALIUM_KERNEL_VER" in
+    5.10.*)
+      ui_print "    [+] Validated target kernel: 5.10.xxx (MT6789 GKI 5.10 baseline)"
+      ;;
+    6.12.*)
+      abort "HARDBRICK RISK: Target kernel is $HALIUM_KERNEL_VER! Tanzanite Halium ONLY supports 5.10.xxx. Kernel 6.12 is incompatible and causes a hardbrick!"
+      ;;
+    *)
+      abort "Unsupported target kernel: $HALIUM_KERNEL_VER! Only 5.10.xxx is supported."
+      ;;
+  esac
+fi
+
+# 2. Validate Currently Installed Stock Firmware Kernel on Device
+ACTIVE_BOOT_PART="/dev/block/by-name/boot${SLOT}"
+ACTIVE_KERNEL_VER=""
+if [ -e "$ACTIVE_BOOT_PART" ]; then
+  ACTIVE_KERNEL_VER=$(extract_kernel_ver "$ACTIVE_BOOT_PART" || true)
+fi
+if [ -z "$ACTIVE_KERNEL_VER" ] && [ -r "/proc/version" ]; then
+  ACTIVE_KERNEL_VER=$(grep -oE 'Linux version [0-9]+\.[0-9]+\.[0-9]+[^ ]*' /proc/version | sed -E 's/.*Linux version ([0-9]+\.[0-9]+\.[0-9]+[^ ]*).*/\1/' || true)
+fi
+
+if [ -n "$ACTIVE_KERNEL_VER" ]; then
+  ui_print "[*] Detected device firmware kernel: $ACTIVE_KERNEL_VER"
+  case "$ACTIVE_KERNEL_VER" in
+    6.12.*)
+      ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      ui_print "[!] FATAL: DEVICE IS RUNNING LINUX KERNEL 6.12.xxx!"
+      ui_print "[!] Flashing this port onto a 6.12 baseline WILL HARDBRICK the device."
+      ui_print "[!] MediaTek preloader and vendor blobs require kernel 5.10."
+      ui_print "[!] Please downgrade your stock firmware to Android 12-14 (Kernel 5.10) first!"
+      ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      abort "Installation aborted to prevent a permanent device hardbrick."
+      ;;
+    5.10.*)
+      ui_print "    [+] Firmware baseline verified: 5.10.xxx (Safe to install)"
+      ;;
+    *)
+      ui_print "    [!] Warning: Unrecognized firmware kernel version: $ACTIVE_KERNEL_VER"
+      ui_print "    [!] Tanzanite Halium requires a 5.10.xxx firmware baseline."
+      ;;
+  esac
+fi
+
+# Flash Preloader Engineering to BOTH slots (with smart hash verification & skip confirmation)
+PL_IMG="$WORK/partitions/preloader_eng.bin"
+
+if [ -f "$PL_IMG" ]; then
+  ui_print "=============================================="
+  ui_print " MT6789 Bootloader Security: Preloader Eng    "
+  ui_print "=============================================="
+
+  TARGET_PL_A=$(find_preloader_part a || echo "/dev/block/by-name/preloader_raw_a")
+  TARGET_PL_B=$(find_preloader_part b || echo "/dev/block/by-name/preloader_raw_b")
+
+  PL_SIZE=$("$BB" wc -c < "$PL_IMG" | tr -d ' \r\n')
+  EXPECTED_PL_SHA=$("$BB" sha256sum "$PL_IMG" | cut -d' ' -f1)
+
+  ui_print "[*] Verifying existing preloader hashes across both slots..."
+
+  CURR_PL_A_SHA=""
+  CURR_PL_B_SHA=""
+
+  if [ -e "$TARGET_PL_A" ]; then
+    if [ "$TARGET_PL_A" = "/dev/block/sda" ]; then
+      CURR_PL_A_SHA=$(dd if="$TARGET_PL_A" bs=4096 skip=1 count=$(( (PL_SIZE + 4095) / 4096 )) 2>/dev/null | head -c "$PL_SIZE" | "$BB" sha256sum | cut -d' ' -f1)
+    else
+      CURR_PL_A_SHA=$(dd if="$TARGET_PL_A" bs=4096 count=$(( (PL_SIZE + 4095) / 4096 )) 2>/dev/null | head -c "$PL_SIZE" | "$BB" sha256sum | cut -d' ' -f1)
+    fi
+  fi
+
+  if [ -e "$TARGET_PL_B" ]; then
+    if [ "$TARGET_PL_B" = "/dev/block/sdb" ]; then
+      CURR_PL_B_SHA=$(dd if="$TARGET_PL_B" bs=4096 skip=1 count=$(( (PL_SIZE + 4095) / 4096 )) 2>/dev/null | head -c "$PL_SIZE" | "$BB" sha256sum | cut -d' ' -f1)
+    else
+      CURR_PL_B_SHA=$(dd if="$TARGET_PL_B" bs=4096 count=$(( (PL_SIZE + 4095) / 4096 )) 2>/dev/null | head -c "$PL_SIZE" | "$BB" sha256sum | cut -d' ' -f1)
+    fi
+  fi
+
+  PL_A_OK=0; [ "$CURR_PL_A_SHA" = "$EXPECTED_PL_SHA" ] && PL_A_OK=1
+  PL_B_OK=0; [ "$CURR_PL_B_SHA" = "$EXPECTED_PL_SHA" ] && PL_B_OK=1
+
+  [ "$PL_A_OK" -eq 1 ] && ui_print "    [+] preloader slot A: Preloader Eng verified" || ui_print "    [-] preloader slot A: Stock or outdated"
+  [ "$PL_B_OK" -eq 1 ] && ui_print "    [+] preloader slot B: Preloader Eng verified" || ui_print "    [-] preloader slot B: Stock or outdated"
+
+  ALL_BOOTLOADER_MATCH=0
+  if [ "$PL_A_OK" -eq 1 ] && [ "$PL_B_OK" -eq 1 ]; then
+    ALL_BOOTLOADER_MATCH=1
+  fi
+
+  # Detect volume key input device
+  KPD_DEV=""
+  for ev in /dev/input/event*; do
+    ev_name=$(cat "/sys/class/input/$(basename "$ev")/device/name" 2>/dev/null || true)
+    case "$ev_name" in
+      *kpd*|*keys*|*keyboard*) KPD_DEV="$ev"; break ;;
+    esac
+  done
+
+  ACTION_FLASH_BOOTLOADER=1
+  if [ "$ALL_BOOTLOADER_MATCH" -eq 1 ]; then
+    ui_print "[+] Preloader Eng is ALREADY up to date on both slots!"
+    ui_print "[?] Skip flashing preloader? (Default: SKIP in 5s)"
+    ui_print "    -> Press Volume UP within 5s to FORCE RE-FLASH"
+    ui_print "    -> Press Volume DOWN or wait 5s to SKIP"
+
+    KEY_PRESSED=""
+    if [ -n "$KPD_DEV" ] && [ -e "$KPD_DEV" ] && which getevent >/dev/null 2>&1; then
+      EV_DATA=$("$BB" timeout 5 getevent -c 2 "$KPD_DEV" 2>/dev/null || true)
+      case "$EV_DATA" in
+        *0073*|*0001*0073*) KEY_PRESSED="UP" ;;
+        *0072*|*0001*0072*) KEY_PRESSED="DOWN" ;;
+      esac
+    else
+      "$BB" sleep 5 2>/dev/null || sleep 5
+    fi
+
+    if [ "$KEY_PRESSED" = "UP" ]; then
+      ui_print "[!] Volume UP pressed: Force re-flashing both slots..."
+      ACTION_FLASH_BOOTLOADER=1
+    else
+      ui_print "[+] Skipping preloader flashing (already up to date)."
+      ACTION_FLASH_BOOTLOADER=0
+    fi
+  else
+    ui_print "[!] Preloader Eng is NOT fully installed on both slots."
+    ui_print "[?] Flash Preloader Eng to BOTH slots? (Default: FLASH in 5s)"
+    ui_print "    -> Press Volume UP within 5s to SKIP"
+    ui_print "    -> Press Volume DOWN or wait 5s to FLASH"
+
+    KEY_PRESSED=""
+    if [ -n "$KPD_DEV" ] && [ -e "$KPD_DEV" ] && which getevent >/dev/null 2>&1; then
+      EV_DATA=$("$BB" timeout 5 getevent -c 2 "$KPD_DEV" 2>/dev/null || true)
+      case "$EV_DATA" in
+        *0073*|*0001*0073*) KEY_PRESSED="UP" ;;
+        *0072*|*0001*0072*) KEY_PRESSED="DOWN" ;;
+      esac
+    else
+      "$BB" sleep 5 2>/dev/null || sleep 5
+    fi
+
+    if [ "$KEY_PRESSED" = "UP" ]; then
+      ui_print "[!] Volume UP pressed: User chose to SKIP preloader flashing."
+      ACTION_FLASH_BOOTLOADER=0
+    else
+      ui_print "[+] Proceeding to flash Preloader Eng to BOTH slots..."
+      ACTION_FLASH_BOOTLOADER=1
+    fi
+  fi
+
+  if [ "$ACTION_FLASH_BOOTLOADER" -eq 1 ]; then
+    ui_print "[*] Flashing Preloader Engineering to both slots..."
+    if [ -n "$TARGET_PL_A" ] && [ -e "$TARGET_PL_A" ]; then
+      blockdev --setrw "$TARGET_PL_A" 2>/dev/null || true
+      if [ "$TARGET_PL_A" = "/dev/block/sda" ]; then
+        dd if="$PL_IMG" of="$TARGET_PL_A" bs=4096 seek=1
+      else
+        dd if="$PL_IMG" of="$TARGET_PL_A" bs=4M
+      fi
+      ui_print "    [+] Flashed preloader slot A ($TARGET_PL_A) <- Preloader Eng"
+    fi
+    if [ -n "$TARGET_PL_B" ] && [ -e "$TARGET_PL_B" ]; then
+      blockdev --setrw "$TARGET_PL_B" 2>/dev/null || true
+      if [ "$TARGET_PL_B" = "/dev/block/sdb" ]; then
+        dd if="$PL_IMG" of="$TARGET_PL_B" bs=4096 seek=1
+      else
+        dd if="$PL_IMG" of="$TARGET_PL_B" bs=4M
+      fi
+      ui_print "    [+] Flashed preloader slot B ($TARGET_PL_B) <- Preloader Eng"
+    fi
+    sync
+    ui_print "[+] Preloader Engineering active on both slots A & B."
+  fi
+fi
+
+# 10. Backup Stock Boot Partition and Provision Rootfs
+
+# Backup current slot boot to $WORK/stock_backup before overwriting
 mkdir -p "$WORK/stock_backup"
-ui_print "[*] Backing up current slot ($SLOT) boot, vendor_boot, and dtbo..."
-for p in boot vendor_boot dtbo; do
-  dd if="/dev/block/by-name/${p}${SLOT}" of="$WORK/stock_backup/${p}_stock.img" bs=4M
-  [ -s "$WORK/stock_backup/${p}_stock.img" ] || abort "Failed to backup /dev/block/by-name/${p}${SLOT}!"
-done
+ui_print "[*] Backing up current slot ($SLOT) boot..."
+dd if="/dev/block/by-name/boot${SLOT}" of="$WORK/stock_backup/boot_stock.img" bs=4M
+[ -s "$WORK/stock_backup/boot_stock.img" ] || abort "Failed to backup /dev/block/by-name/boot${SLOT}!"
 
 USERDATA_PART="/dev/block/by-name/userdata"
 if [ -e "$USERDATA_PART" ]; then
@@ -384,39 +632,83 @@ if [ -e "$USERDATA_PART" ]; then
     mkdir -p /data
     mountpoint -q /data 2>/dev/null || mount -t ext4 "$USERDATA_PART" /data
     mkdir -p /data/ubuntu
+    ln -sf ubuntu /data/halium-rootfs 2>/dev/null || true
 
-    # Secure Halium & Stock boot/vendor_boot/dtbo backups early before rootfs extraction
+    # Secure Halium & Stock boot backups early before rootfs extraction
     BACKUP_DIR="/data/media/0/.backup"
     mkdir -p "$BACKUP_DIR" 2>/dev/null || true
     cp -f "$WORK/partitions/boot.img" "$BACKUP_DIR/boot_halium.img" 2>/dev/null || true
-    cp -f "$WORK/partitions/vendor_boot.img" "$BACKUP_DIR/vendor_boot_halium.img" 2>/dev/null || true
-    cp -f "$WORK/partitions/dtbo.img" "$BACKUP_DIR/dtbo_halium.img" 2>/dev/null || true
 
-    for p in boot vendor_boot dtbo; do
-      if [ -s "$WORK/stock_backup/${p}_stock.img" ]; then
-        [ -s "$BACKUP_DIR/${p}_stock.img" ] || cp -f "$WORK/stock_backup/${p}_stock.img" "$BACKUP_DIR/${p}_stock.img" 2>/dev/null || true
-      fi
-    done
+    if [ -s "$WORK/stock_backup/boot_stock.img" ]; then
+      [ -s "$BACKUP_DIR/boot_stock.img" ] || cp -f "$WORK/stock_backup/boot_stock.img" "$BACKUP_DIR/boot_stock.img" 2>/dev/null || true
+    fi
     ui_print "[+] Secured kernel backups in $BACKUP_DIR"
 
     # Check if a valid Ubuntu Touch rootfs is already installed
     IS_ROOTFS_INSTALLED=0
-    if [ -f "/data/.clean_install" ] || [ -f "/data/ubuntu/.clean_install" ]; then
-      ui_print "[!] Clean install requested (.clean_install detected)."
-      ui_print "[*] Removing existing /data/ubuntu rootfs..."
-      rm -rf /data/ubuntu
-      mkdir -p /data/ubuntu
-      rm -f /data/.clean_install /data/ubuntu/.clean_install 2>/dev/null || true
+    DO_CLEAN_INSTALL=0
+
+    if [ -f "/data/.clean_install" ] || [ -f "/data/ubuntu/.clean_install" ] || [ -f "/sdcard/.clean_install" ]; then
+      ui_print "[!] Clean install flag detected (.clean_install)."
+      DO_CLEAN_INSTALL=1
     elif [ -d "/data/ubuntu/usr" ] && [ -d "/data/ubuntu/etc" ] && [ -f "/data/ubuntu/etc/os-release" ]; then
       IS_ROOTFS_INSTALLED=1
     fi
 
-    if [ "$IS_ROOTFS_INSTALLED" -eq 1 ]; then
-      ui_print "[*] Existing Ubuntu Touch installation detected in /data/ubuntu."
-      ui_print "[*] Skipping base rootfs extraction (preserving system state & user data)..."
-    else
+    # Interactive prompt if an existing rootfs is found (defaults to Direct Update without wiping rootfs)
+    if [ "$IS_ROOTFS_INSTALLED" -eq 1 ] && [ "$DO_CLEAN_INSTALL" -eq 0 ]; then
+      if [ -f "/data/.update" ] || [ -f "/data/ubuntu/.update" ] || [ -f "/sdcard/.update" ]; then
+        ui_print "[+] Direct update flag detected (.update). Preserving /data/ubuntu rootfs."
+        DO_CLEAN_INSTALL=0
+      else
+        ui_print "=============================================="
+        ui_print " Ubuntu Touch Direct Update Selection "
+        ui_print "=============================================="
+        ui_print "[*] Existing Ubuntu Touch installation detected in /data/ubuntu."
+        ui_print "[?] Choose installation mode (Default: DIRECT UPDATE in 5s):"
+        ui_print "    -> DIRECT UPDATE: Preserves /data/ubuntu (keeps apps, personal files & data)."
+        ui_print "                      Updates Halium kernel, bootloader, and device system overlay."
+        ui_print "    -> CLEAN INSTALL: Wipes /data/ubuntu and performs a fresh rootfs extraction."
+        ui_print ""
+        ui_print "    -> Press Volume UP within 5s for CLEAN INSTALL (Wipe /data/ubuntu)"
+        ui_print "    -> Press Volume DOWN or wait 5s for DIRECT UPDATE (Preserve rootfs)"
+
+        KEY_PRESSED=""
+        if [ -n "$KPD_DEV" ] && [ -e "$KPD_DEV" ] && which getevent >/dev/null 2>&1; then
+          EV_DATA=$("$BB" timeout 5 getevent -c 2 "$KPD_DEV" 2>/dev/null || true)
+          case "$EV_DATA" in
+            *0073*|*0001*0073*) KEY_PRESSED="UP" ;;
+            *0072*|*0001*0072*) KEY_PRESSED="DOWN" ;;
+          esac
+        else
+          "$BB" sleep 5 2>/dev/null || sleep 5
+        fi
+
+        if [ "$KEY_PRESSED" = "UP" ]; then
+          ui_print "[!] Volume UP pressed: Clean install selected."
+          DO_CLEAN_INSTALL=1
+        else
+          ui_print "[+] Direct update selected: Preserving /data/ubuntu rootfs & user data."
+          DO_CLEAN_INSTALL=0
+        fi
+      fi
+    fi
+
+    if [ "$DO_CLEAN_INSTALL" -eq 1 ]; then
+      ui_print "[*] Removing existing /data/ubuntu rootfs for clean install..."
+      rm -rf /data/ubuntu
+      mkdir -p /data/ubuntu
+      rm -f /data/.clean_install /data/ubuntu/.clean_install /sdcard/.clean_install 2>/dev/null || true
       ui_print "[*] Extracting ubuntu-touch-hybris-rootfs-arm64.tar.gz to /data/ubuntu..."
       unzip -p "$ZIPFILE" "ubuntu-touch-hybris-rootfs-arm64.tar.gz" | "$BB" tar --numeric-owner -xzpf - -C /data/ubuntu/
+    else
+      if [ "$IS_ROOTFS_INSTALLED" -eq 1 ]; then
+        ui_print "[*] Preserving existing /data/ubuntu rootfs (user data, configs, packages kept intact)."
+        ui_print "[*] Proceeding with direct update of device overlay, kernel, and configs..."
+      else
+        ui_print "[*] Fresh install: Extracting ubuntu-touch-hybris-rootfs-arm64.tar.gz to /data/ubuntu..."
+        unzip -p "$ZIPFILE" "ubuntu-touch-hybris-rootfs-arm64.tar.gz" | "$BB" tar --numeric-owner -xzpf - -C /data/ubuntu/
+      fi
     fi
 
     # Extract Halium 12 LXC container (android-rootfs.img)
@@ -447,12 +739,20 @@ if [ -e "$USERDATA_PART" ]; then
       unzip -p "$ZIPFILE" "device_tanzanite_system.tar.gz" | "$BB" gzip -dc | "$BB" tar --numeric-owner -xpf - -C /data/ubuntu/
     fi
     touch /data/ubuntu/.writable_image /data/.writable_image /data/.force-adb /data/ubuntu/.rootfs_installed
+    ln -sf ubuntu /data/halium-rootfs 2>/dev/null || true
 
     [ -d "/data/ubuntu/usr" ] && [ -d "/data/ubuntu/etc" ] && [ -s "/data/ubuntu/var/lib/lxc/android/android-rootfs.img" ] || abort "Rootfs extraction verification failed!"
     if [ "$IS_ROOTFS_INSTALLED" -eq 1 ]; then
       ui_print "[+] Ubuntu Touch rootfs updated with latest device overlay!"
     else
       ui_print "[+] Ubuntu Touch rootfs, Android LXC container & device overlay extracted to /data/ubuntu!"
+    fi
+
+    # Write build manifest to /data/ubuntu/etc/tanzanite-build.prop
+    if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "META-INF/tanzanite/build.prop"; then
+      unzip -p "$ZIPFILE" "META-INF/tanzanite/build.prop" > /data/ubuntu/etc/tanzanite-build.prop 2>/dev/null || true
+      chmod 644 /data/ubuntu/etc/tanzanite-build.prop 2>/dev/null || true
+      ui_print "[+] Updated build manifest: /etc/tanzanite-build.prop"
     fi
 
     # Provision Ubuntu Touch apt dependencies and sandbox fixes
@@ -481,23 +781,18 @@ if [ -e "$USERDATA_PART" ]; then
     if [ -d "/sdcard" ] && mountpoint -q /sdcard 2>/dev/null; then
       mkdir -p "/sdcard/.backup"
       cp -f "$WORK/partitions/boot.img" "/sdcard/.backup/boot_halium.img"
-      cp -f "$WORK/partitions/vendor_boot.img" "/sdcard/.backup/vendor_boot_halium.img"
-      cp -f "$WORK/partitions/dtbo.img" "/sdcard/.backup/dtbo_halium.img"
-      for p in boot vendor_boot dtbo; do
-        [ -s "/sdcard/.backup/${p}_stock.img" ] || cp -f "$WORK/stock_backup/${p}_stock.img" "/sdcard/.backup/${p}_stock.img"
-      done
+      [ -s "/sdcard/.backup/boot_stock.img" ] || cp -f "$WORK/stock_backup/boot_stock.img" "/sdcard/.backup/boot_stock.img"
     fi
   fi
 fi
 
-# 10. Flash Halium boot, vendor_boot, and dtbo to active slot
-ui_print "[*] Flashing Halium boot, vendor_boot, and dtbo to slot $SLOT..."
-for p in boot vendor_boot dtbo; do
-  TARGET_PART="/dev/block/by-name/${p}${SLOT}"
-  blockdev --setrw "$TARGET_PART" 2>/dev/null || true
-  dd if="$WORK/partitions/${p}.img" of="$TARGET_PART" bs=4M
-  ui_print "    [+] Flashed ${p}${SLOT} <- Halium ${p}.img"
-done
+# 11. Flash Halium boot to active slot (preserve vendor_boot and dtbo)
+ui_print "[*] Flashing Halium boot to slot $SLOT..."
+TARGET_PART="/dev/block/by-name/boot${SLOT}"
+blockdev --setrw "$TARGET_PART" 2>/dev/null || true
+dd if="$WORK/partitions/boot.img" of="$TARGET_PART" bs=4M
+ui_print "    [+] Flashed boot${SLOT} <- Halium boot.img"
+ui_print "[*] Preserved vendor_boot${SLOT} and dtbo${SLOT}"
 sync
 
 rm -rf "$WORK"

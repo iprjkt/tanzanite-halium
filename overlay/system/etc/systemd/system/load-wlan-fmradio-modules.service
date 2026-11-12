@@ -1,10 +1,12 @@
 [Unit]
 Description=Load WLAN kernel modules
-After=lxc@android.service
+After=wmt-launcher.service
+Requires=wmt-launcher.service
+Before=device-hacks.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/sbin/modprobe wlan_drv_gen4m_6789
+ExecStart=/bin/sh -c '/usr/sbin/modprobe wmt_chrdev_wifi || true; /usr/sbin/modprobe wlan_drv_gen4m_6789 || true'
 
 [Install]
 WantedBy=multi-user.target

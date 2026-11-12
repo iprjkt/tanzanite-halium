@@ -6,19 +6,82 @@ for i in $(seq 1 50); do
     sleep 0.2
 done
 
-# Wait for nvram to be loaded (max 5s).
-for i in $(seq 1 25); do
-    [ "$(getprop vendor.service.nvram_init)" = "Ready" ] && break
+# Wait for wmt_launcher to be running
+for i in $(seq 1 50); do
+    pgrep -f wmt_launcher >/dev/null && break
     sleep 0.2
 done
 
-# Enable Wi-Fi adapter in client mode (max 10s).
+# Ensure WLAN and Bluetooth drivers are loaded
+/usr/sbin/modprobe wmt_chrdev_wifi 2>/dev/null || true
+/usr/sbin/modprobe wlan_drv_gen4m_6789 2>/dev/null || true
+/usr/sbin/modprobe bt_drv_connac1x 2>/dev/null || true
+/usr/sbin/modprobe hci_vhci 2>/dev/null || true
+/usr/sbin/modprobe bnep 2>/dev/null || true
+
+# Wait for wmtWifi sysfs device (max 10s).
 for i in $(seq 1 50); do
-    [ -e /dev/wmtWifi ] && break
+    [ -f /sys/devices/virtual/wmtWifi/wmtWifi/dev ] && break
     sleep 0.2
 done
+
+# Dynamically recreate /dev/wmtWifi with correct major:minor from sysfs
+if [ -f /sys/devices/virtual/wmtWifi/wmtWifi/dev ]; then
+    devno=$(cat /sys/devices/virtual/wmtWifi/wmtWifi/dev)
+    maj="${devno%:*}"
+    min="${devno#*:}"
+    rm -f /dev/wmtWifi
+    mknod -m 666 /dev/wmtWifi c "$maj" "$min"
+    chown 1001:1001 /dev/wmtWifi 2>/dev/null || true
+    chmod 666 /dev/wmtWifi 2>/dev/null || true
+
+    # Also make sure container has this node
+    if [ -d /var/lib/lxc/android/rootfs/dev ]; then
+        rm -f /var/lib/lxc/android/rootfs/dev/wmtWifi
+        mknod -m 666 /var/lib/lxc/android/rootfs/dev/wmtWifi c "$maj" "$min"
+        chown 1001:1001 /var/lib/lxc/android/rootfs/dev/wmtWifi 2>/dev/null || true
+        chmod 666 /var/lib/lxc/android/rootfs/dev/wmtWifi 2>/dev/null || true
+    fi
+fi
+
+# Wait for stpbt sysfs device (max 5s) and ensure /dev/stpbt has dynamic major:minor (192:0)
+for i in $(seq 1 25); do
+    [ -f /sys/devices/virtual/stpbt/stpbt/dev ] && break
+    sleep 0.2
+done
+if [ -f /sys/devices/virtual/stpbt/stpbt/dev ]; then
+    btdevno=$(cat /sys/devices/virtual/stpbt/stpbt/dev)
+    btmaj="${btdevno%:*}"
+    btmin="${btdevno#*:}"
+    btexp=$(printf '%x:%x' "$btmaj" "$btmin")
+    if [ "$(stat -c '%t:%T' /dev/stpbt 2>/dev/null)" != "$btexp" ]; then
+        rm -f /dev/stpbt
+        mknod -m 666 /dev/stpbt c "$btmaj" "$btmin"
+    fi
+    chown 1002:1002 /dev/stpbt 2>/dev/null || true
+    chmod 666 /dev/stpbt 2>/dev/null || true
+
+    lxc-attach -n android -- /system/bin/sh -c "
+        export PATH=/system/bin:/vendor/bin
+        if [ \"\$(stat -c '%t:%T' /dev/stpbt 2>/dev/null)\" != \"$btexp\" ]; then
+            umount -l /dev/stpbt 2>/dev/null || true
+            rm -f /dev/stpbt
+            mknod -m 666 /dev/stpbt c $btmaj $btmin
+        fi
+        chown 1002:1002 /dev/stpbt 2>/dev/null || true
+        chmod 666 /dev/stpbt 2>/dev/null || true
+    " 2>/dev/null || true
+fi
+if [ -e /dev/vhci ]; then
+    chmod 660 /dev/vhci 2>/dev/null || true
+fi
+
+# Short delay to let wmt_launcher attach to /dev/stpwmt
+sleep 0.5
+
+# Turn on Wi-Fi adapter via character device write
 if [ -e /dev/wmtWifi ]; then
-    echo P > /dev/wmtWifi
+    echo 1 > /dev/wmtWifi 2>/dev/null || true
 fi
 
 # Set wifi.interface property since urfkill.conf expects that
@@ -44,17 +107,43 @@ if [ ! -e /var/lib/waydroid/overlay/vendor/etc/init/android.hardware.graphics.al
     ln -sf /dev/null /var/lib/waydroid/overlay/vendor/etc/init/android.hardware.graphics.allocator@2.0-service.rc
 fi
 
-# Fingerprint sensor now functional, undo originally shipped service mask from userdata-backed writable-path
-if [ -L /etc/systemd/system/biometryd.service ]; then
-    rm /etc/systemd/system/biometryd.service
-    systemctl daemon-reload
-    systemctl start biometryd
+# Mask biometryd until fingerprint HAL is properly integrated (avoids repowerd start stall)
+systemctl mask biometryd 2>/dev/null || true
 
-    # Make sure it's also gone from the base rootfs in case of 20.04 delta update potentially not removing it
-    mkdir /tmp/rootfs
-    mount --bind / /tmp/rootfs
-    mount -o remount,rw /tmp/rootfs
-    rm /tmp/rootfs/etc/systemd/system/biometryd.service
-    umount /tmp/rootfs
-    rmdir /tmp/rootfs
+# Ensure graphics HALs are running
+for i in $(seq 1 50); do
+    [ "$(getprop hwservicemanager.ready)" = "true" ] && break
+    sleep 0.2
+done
+getprop init.svc.vendor.gralloc-4-0 | grep -q running || setprop ctl.start vendor.gralloc-4-0
+getprop init.svc.vendor.hwcomposer-2-3 | grep -q running || setprop ctl.start vendor.hwcomposer-2-3
+
+# Ensure MediaTek PowerHAL is running (prevents CMDQ 10s SW timeout on display suspend)
+getprop init.svc.power-hal-1-0 | grep -q running || setprop ctl.start power-hal-1-0
+
+# Ensure flashlight sysfs attribute is writable
+if [ -e /sys/devices/platform/flashlights_mt6789/mt6789_flash ]; then
+    chmod 666 /sys/devices/platform/flashlights_mt6789/mt6789_flash 2>/dev/null || true
 fi
+
+# Ensure sensor hub (hf_manager / scp) device nodes are accessible inside Android container
+for sdev in hf_manager scp; do
+    if [ -e "/dev/$sdev" ]; then
+        chown 1000:1000 "/dev/$sdev" 2>/dev/null || true
+        chmod 666 "/dev/$sdev" 2>/dev/null || true
+    fi
+done
+lxc-attach -n android -- /system/bin/chown 1000:1000 /dev/hf_manager /dev/scp 2>/dev/null || true
+lxc-attach -n android -- /system/bin/chmod 666 /dev/hf_manager /dev/scp 2>/dev/null || true
+
+# Start MediaTek Sensors HAL 2.0 and wait briefly for subhal registration
+setprop ctl.restart vendor.sensors-hal-2-0-multihal
+sleep 2
+systemctl restart --no-block sensorfwd 2>/dev/null || true
+
+# Ensure MediaTek Bluetooth HIDL 1.1 HAL and bluebinder are running
+getprop init.svc.bluetooth-1-1 | grep -q running || setprop ctl.start bluetooth-1-1
+systemctl unmask bluebinder.service 2>/dev/null || true
+systemctl start --no-block bluebinder.service 2>/dev/null || true
+
+exit 0

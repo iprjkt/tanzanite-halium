@@ -12,7 +12,7 @@
 # A companion .sha256 and .buildinfo are written next to the zip.
 #
 # Expects (relative to the repo root unless overridden by env):
-#   out/partitions/{boot.img,vendor_boot.img,dtbo.img}   from `./build.sh -b workdir`
+#   out/partitions/boot.img                              from `./build.sh -b workdir`
 #   out/device_tanzanite.tar.xz
 #   ota/ubuntu-touch-android9plus-rootfs-arm64.tar.gz    UT Noble rootfs
 #   ota/halium_halium_arm64.tar.xz                       Halium 12 GSI
@@ -52,7 +52,7 @@ DEVICE_CODENAME="tanzanite"
 ZIP_NAME="${DEVICE_CODENAME}-${UT_RELEASE}-${HALIUM_VERSION}-v${PORT_VERSION}-${BUILD_DATE}-${GIT_SHORT}${GIT_DIRTY}.zip"
 TARGET="${TARGET:-$ROOT/dist/$ZIP_NAME}"
 
-for f in "$PART_DIR/boot.img" "$PART_DIR/vendor_boot.img" "$PART_DIR/dtbo.img" \
+for f in "$PART_DIR/boot.img" \
          "$OUT_DIR/device_tanzanite.tar.xz" "$ROOTFS" "$GSI"; do
     [ -s "$f" ] || { echo "[-] Missing required input: $f" >&2; exit 1; }
 done
@@ -120,11 +120,8 @@ case "$DETECTED_KERNEL_VER" in
         ;;
 esac
 
-# Halium boot images built from our kernel
+# Halium boot image built from our kernel (vendor_boot and dtbo excluded)
 cp -f "$PART_DIR/boot.img"        "$STAGE/partitions/"
-cp -f "$PART_DIR/vendor_boot.img" "$STAGE/partitions/"
-cp -f "$PART_DIR/dtbo.img"        "$STAGE/partitions/"
-[ -f "$ROOT/tanzanite-fenrir.img" ] && cp -f "$ROOT/tanzanite-fenrir.img" "$STAGE/partitions/lk_fenrir.img"
 [ -f "$ROOT/preloader_tanzanite.bin" ] && cp -f "$ROOT/preloader_tanzanite.bin" "$STAGE/partitions/preloader_eng.bin"
 
 # Device overlay applied on top of the extracted rootfs
@@ -149,7 +146,7 @@ tanzanite.build.halium=${HALIUM_VERSION}
 tanzanite.build.date=${BUILD_STAMP}
 tanzanite.build.commit=${GIT_SHORT}${GIT_DIRTY}
 tanzanite.build.kernel=${DETECTED_KERNEL_VER}
-tanzanite.build.modules=385
+tanzanite.build.modules=387
 tanzanite.build.installer=${ZIP_NAME}
 MANIFEST
 
@@ -176,7 +173,7 @@ device        $DEVICE_CODENAME
 commit        $GIT_SHORT$GIT_DIRTY
 built         $BUILD_STAMP
 kernel        ${DETECTED_KERNEL_VER}
-modules       385
+modules       387
 INFO
 
 echo "[+] Done: $TARGET"

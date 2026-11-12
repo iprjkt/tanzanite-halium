@@ -1,0 +1,8 @@
+#!/bin/sh
+if [ -e /dev/socket/property_service ] && lxc-info -n android -s 2>/dev/null | grep -q RUNNING; then
+    exec lxc-attach -n android -- /system/bin/setprop "$@" 2>/dev/null
+elif [ -x /usr/bin/setprop.orig ]; then
+    exec /usr/bin/setprop.orig "$@"
+else
+    exit 0
+fi

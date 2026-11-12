@@ -1,5 +1,5 @@
 #!/bin/sh
-# boot-to-android: Restore Stock HyperOS boot, vendor_boot, and dtbo to active A/B slot and reboot
+# boot-to-android: Restore Stock HyperOS boot to active A/B slot and reboot
 set -e
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -44,14 +44,12 @@ fi
 
 echo "[*] Using stock backup directory: $BACKUP_DIR"
 
-# 3. Validate stock images before flashing anything
-for p in boot dtbo; do
-  IMG="$BACKUP_DIR/${p}_stock.img"
-  if [ ! -s "$IMG" ]; then
-    echo "[!] Error: Missing or empty backup image: $IMG" >&2
-    exit 1
-  fi
-done
+# 3. Validate stock image before flashing anything
+IMG="$BACKUP_DIR/boot_stock.img"
+if [ ! -s "$IMG" ]; then
+  echo "[!] Error: Missing or empty backup image: $IMG" >&2
+  exit 1
+fi
 
 # 4. Resolve partition block device paths (supports /dev/disk/by-partlabel, /dev/block/by-name, /sys/class/block)
 find_partition_node() {
@@ -75,34 +73,22 @@ find_partition_node() {
 }
 
 BOOT_DEV=$(find_partition_node "boot${SLOT}" || true)
-VBOOT_DEV=$(find_partition_node "vendor_boot${SLOT}" || true)
-DTBO_DEV=$(find_partition_node "dtbo${SLOT}" || true)
 
-for dev in "$BOOT_DEV" "$VBOOT_DEV" "$DTBO_DEV"; do
-  if [ -z "$dev" ] || [ ! -b "$dev" ]; then
-    echo "[!] Error: Could not resolve block device for slot $SLOT partitions!" >&2
-    echo "    boot=${BOOT_DEV:-missing}, vendor_boot=${VBOOT_DEV:-missing}, dtbo=${DTBO_DEV:-missing}" >&2
-    exit 1
-  fi
-done
+if [ -z "$BOOT_DEV" ] || [ ! -b "$BOOT_DEV" ]; then
+  echo "[!] Error: Could not resolve block device for boot${SLOT}!" >&2
+  exit 1
+fi
 
-echo "[*] Target partitions resolved:"
-echo "    boot${SLOT}        -> $BOOT_DEV"
-echo "    vendor_boot${SLOT} -> $VBOOT_DEV"
-echo "    dtbo${SLOT}        -> $DTBO_DEV"
+echo "[*] Target partition resolved:"
+echo "    boot${SLOT} -> $BOOT_DEV"
 
-# 5. Flash stock images (preserve vendor_boot for OrangeFox recovery)
-for item in "boot:$BOOT_DEV" "dtbo:$DTBO_DEV"; do
-  NAME="${item%%:*}"
-  DEV="${item#*:}"
-  IMG="$BACKUP_DIR/${NAME}_stock.img"
-  echo "[*] Flashing $IMG -> $DEV..."
-  blockdev --setrw "$DEV" 2>/dev/null || true
-  dd if="$IMG" of="$DEV" bs=4M status=none
-done
+# 5. Flash stock boot image
+echo "[*] Flashing $IMG -> $BOOT_DEV..."
+blockdev --setrw "$BOOT_DEV" 2>/dev/null || true
+dd if="$IMG" of="$BOOT_DEV" bs=4M status=none
 
 sync
-echo "[+] Stock HyperOS boot and dtbo restored to slot $SLOT (vendor_boot recovery preserved)!"
+echo "[+] Stock HyperOS boot restored to slot $SLOT!"
 
 if [ "$1" = "--no-reboot" ]; then
   echo "[*] --no-reboot specified; skipping automatic reboot."

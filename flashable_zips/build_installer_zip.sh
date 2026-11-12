@@ -86,9 +86,6 @@ case "$DETECTED_KERNEL_VER" in
 esac
 
 cp -f "$OUT_DIR/partitions/boot.img" "$TMP_STAGE/partitions/"
-cp -f "$OUT_DIR/partitions/vendor_boot.img" "$TMP_STAGE/partitions/"
-cp -f "$OUT_DIR/partitions/dtbo.img" "$TMP_STAGE/partitions/"
-[ -f "$ROOT_DIR/tanzanite-fenrir.img" ] && cp -f "$ROOT_DIR/tanzanite-fenrir.img" "$TMP_STAGE/partitions/lk_fenrir.img"
 [ -f "$ROOT_DIR/preloader_tanzanite.bin" ] && cp -f "$ROOT_DIR/preloader_tanzanite.bin" "$TMP_STAGE/partitions/preloader_eng.bin"
 
 # Rootfs & overlays
@@ -129,7 +126,7 @@ tanzanite.build.halium=halium12
 tanzanite.build.date=${BUILD_STAMP}
 tanzanite.build.commit=${GIT_SHORT}
 tanzanite.build.kernel=${DETECTED_KERNEL_VER}
-tanzanite.build.modules=385
+tanzanite.build.modules=387
 tanzanite.build.installer=$(basename "$TARGET_ZIP")
 MANIFEST
 

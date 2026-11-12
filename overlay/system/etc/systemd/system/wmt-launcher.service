@@ -1,0 +1,15 @@
+[Unit]
+Description=MediaTek WMT Connectivity Launcher
+After=lxc-android-config.service
+Requires=lxc-android-config.service
+Before=load-wlan-fmradio-modules.service device-hacks.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/libexec/wmt-loader-helper
+ExecStart=/usr/bin/lxc-attach -n android -- /vendor/bin/wmt_launcher -p /vendor/firmware/ -o 1
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

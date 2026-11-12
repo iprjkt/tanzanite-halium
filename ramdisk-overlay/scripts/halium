@@ -696,7 +696,12 @@ mountroot() {
 
 		# Mounting userdata outside of /android, to avoid having LXC container access it
 		mkdir -p ${rootmnt}/userdata
-		mount --move /tmpmnt ${rootmnt}/userdata
+		if [ "$file_layout" = "subdir" ]; then
+			mount -o bind /tmpmnt ${rootmnt}/userdata
+			umount -l /tmpmnt 2>/dev/null || true
+		else
+			mount --move /tmpmnt ${rootmnt}/userdata || mount -o bind /tmpmnt ${rootmnt}/userdata
+		fi
 
 		mount --move /android-rootfs ${rootmnt}/var/lib/lxc/android/rootfs
 		[ $ANDROID_IMAGE_MODE = "system" ] && mount -o rw,size=4096 -t tmpfs none ${rootmnt}/android

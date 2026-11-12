@@ -142,6 +142,8 @@ ACTION=="add", KERNEL=="hotknot", OWNER="root", GROUP="system", MODE="0660"
 ACTION=="add", KERNEL=="RT_Monitor", OWNER="system", GROUP="system", MODE="0660"
 ACTION=="add", KERNEL=="kick_powerkey", OWNER="system", GROUP="system", MODE="0660"
 ACTION=="add", KERNEL=="ttyACM0", OWNER="radio", GROUP="radio", MODE="0660"
+ACTION=="add|change", KERNEL=="hf_manager", OWNER="system", GROUP="system", MODE="0666"
+ACTION=="add|change", KERNEL=="scp", OWNER="system", GROUP="system", MODE="0666"
 
 # --- LEDs, torch and haptics -------------------------------------------------
 # Ubuntu Touch userspace runs as the `phablet` user; the sysfs nodes below are
@@ -153,11 +155,10 @@ ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="green", OWNER="system", GROUP=
 ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="red",   OWNER="system", GROUP="system", MODE="0660"
 ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="blue",  OWNER="system", GROUP="system", MODE="0660"
 
-# Flashlight / torch. The MTK driver registers class `flashlight_core`, which
-# produces /sys/class/flashlight_core/flashlight/flashlight_torch - the exact path
-# tanzanite-flashlight-bridge writes to on behalf of ayatana-indicator-power
-# (deviceinfo FlashlightSysfsPath=/run/flashlight_bridge). Cover the generic
-# `leds` and `flashlight` classes too, since the node name varies by kernel.
+# Flashlight / torch. On tanzanite (board o7), flashlights-mt6789-o7.ko exposes
+# /sys/devices/platform/flashlights_mt6789/mt6789_flash for SC6601 subpmic LED1
+# torch control, alongside /sys/class/flashlight_core/flashlight/flashlight_torch.
+ACTION=="add|change", KERNEL=="flashlights_mt6789", RUN+="/bin/chmod 0666 /sys/devices/platform/flashlights_mt6789/mt6789_flash"
 ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="*flash*", OWNER="system", GROUP="system", MODE="0660"
 ACTION=="add|change", SUBSYSTEM=="flashlight_core", KERNEL=="*", OWNER="system", GROUP="system", MODE="0660"
 ACTION=="add|change", SUBSYSTEM=="flashlight", KERNEL=="*", OWNER="system", GROUP="system", MODE="0660"

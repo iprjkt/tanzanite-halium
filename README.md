@@ -53,7 +53,8 @@ Halium 12 / Ubuntu Touch 24.04 (Noble Numbat) dual-boot port and switcher ecosys
 | **Flashlight / Torch** | Working | `tanzanite-flashlight-bridge` daemon + MTK flashlight drivers |
 | **Screen Rotation / Sensors** | Working | Accelerometer & Orientation via HIDL 2.0 sensorfw |
 | **Cellular / 4G LTE Data** | Working | Dual SIM slots detected via ofono-sailfish & MTK IRadio@1.2 |
-| **WiFi & Bluetooth** | Working | Managed by ConnMan & Bluez / Bluebinder |
+| **WiFi & Bluetooth** | Working | Managed by ConnMan & Bluez / Bluebinder (`hci_vhci`, `bnep`, MT6789 page 2 mask) |
+| **USB File Transfer (MTP)** | Working | FunctionFS MTP responder (`umtprd`) & `usb-moded` extcon tracking |
 | **Camera** | In Progress | ISP & AF kernel modules restored; Halium 12 HAL binding in progress |
 
 ---
@@ -63,7 +64,7 @@ Halium 12 / Ubuntu Touch 24.04 (Noble Numbat) dual-boot port and switcher ecosys
 1. **Dual-Boot Architecture**:
    - Primary installation operates on active Slot A without modifying Slot B.
    - Slot B remains intact as a clean stock HyperOS fallback slot.
-   - Automatically handles stock boot image backups (`boot`, `vendor_boot`, `dtbo`) in `/sdcard/.backup`.
+   - Automatically handles stock boot image backup (`boot_stock.img`) in `/sdcard/.backup` while preserving `vendor_boot` (custom recovery) and stock `dtbo`.
 
 2. **Tanzanite Switcher App (`switcher-app`)**:
    - Android application built with Jetpack Compose & Miuix KMP.
@@ -73,17 +74,17 @@ Halium 12 / Ubuntu Touch 24.04 (Noble Numbat) dual-boot port and switcher ecosys
    - About screen with Ubuntu branding and community links.
 
 3. **Flashable Recovery Installer**:
-   - Standalone TWRP/recovery flashable zip (`tanzanite-halium.zip`) with dynamic A/B slot detection.
+   - Standalone TWRP/OrangeFox recovery flashable zip (`tanzanite-halium.zip`) with dynamic A/B slot detection.
    - Strict kernel baseline validation enforcing Linux 5.10.xxx (aborts on Linux 6.12.xxx to prevent device hardbrick).
-   - Direct Update mode automatically preserves existing `/data/ubuntu` rootfs, user data, and personal apps while upgrading the kernel, bootloader, and device system overlay without wiping.
+   - Direct Update mode automatically preserves existing `/data/ubuntu` rootfs, user data, and personal apps while upgrading the kernel, preloader, and device system overlay without wiping.
    - Automatic vendor fstab patching for unencrypted ext4 userdata.
    - Full AVB verification handling (`vbmeta`, `vbmeta_system`, `vbmeta_vendor`).
-   - Integrated bootloader security flashing (LK Fenrir and Preloader Engineering) with interactive skip detection.
+   - Integrated Preloader Engineering flashing with interactive skip detection (preserves stock `lk`, `dtbo`, and `vendor_boot`).
    - Terminal status display with creator and support links.
 
 > [!CAUTION]
 > **Kernel Version Compatibility (Hardbrick Warning)**:
-> Tanzanite Halium ONLY supports the Linux 5.10.xxx kernel baseline. If your device is running newer firmware with Linux 6.12.xxx, flashing this port WILL permanently hardbrick the device due to incompatible preloader, LK Fenrir, and vendor hardware drivers. You must downgrade to Android 12-14 stock firmware (kernel 5.10.xxx) before flashing.
+> Tanzanite Halium ONLY supports the Linux 5.10.xxx kernel baseline. If your device is running newer firmware with Linux 6.12.xxx, flashing this port WILL permanently hardbrick the device due to incompatible preloader and vendor hardware drivers. You must downgrade to Android 12-14 stock firmware (kernel 5.10.xxx) before flashing.
 
 4. **Rootfs & Subdir Dual-Boot**:
    - Boots Ubuntu Touch rootfs from `/data/ubuntu` on the userdata partition.
@@ -115,10 +116,10 @@ Installation workflow overview:
 - [`flashable_zips/`](file:///home/fxxyz73/tanzanite-halium/flashable_zips): Template scripts and binaries for the recovery installer.
 - [`overlay/`](file:///home/fxxyz73/tanzanite-halium/overlay): Ubuntu Touch rootfs overlay files (drivers, audio, graphics, udev rules).
 - [`ramdisk-overlay/`](file:///home/fxxyz73/tanzanite-halium/ramdisk-overlay): Boot ramdisk modifications.
-- [`vendor-ramdisk-overlay/`](file:///home/fxxyz73/tanzanite-halium/vendor-ramdisk-overlay): Prebuilt MediaTek vendor kernel modules (385 modules including `vendor_dlkm`).
+- [`vendor-ramdisk-overlay/`](file:///home/fxxyz73/tanzanite-halium/vendor-ramdisk-overlay): Prebuilt MediaTek vendor kernel modules (387 modules including `vendor_dlkm`).
 - [`scripts/`](file:///home/fxxyz73/tanzanite-halium/scripts): Tooling and hardware consistency checkers (`check_modules.sh`, `check_device_config.sh`, etc.).
 - [`docs/`](file:///home/fxxyz73/tanzanite-halium/docs): Technical documentation and troubleshooting guides:
-  - [`BOOTLOADER_AVB_LK.md`](file:///home/fxxyz73/tanzanite-halium/docs/BOOTLOADER_AVB_LK.md): Technical analysis of MT6789 boot security and rationale for retaining Preloader Engineering and LK Fenrir.
+  - [`BOOTLOADER_AVB_LK.md`](file:///home/fxxyz73/tanzanite-halium/docs/BOOTLOADER_AVB_LK.md): Technical analysis of MT6789 boot security and Preloader Engineering + disabled AVB architecture.
   - [`MODULE_AUDIT.md`](file:///home/fxxyz73/tanzanite-halium/docs/MODULE_AUDIT.md): Technical audit of vendor kernel modules, GKI `vendor_dlkm`, and peripheral subsystems.
   - [`FLASHING_GUIDE_en.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_en.md): Complete flashing and dual-boot installation guide (English).
   - [`FLASHING_GUIDE_id.md`](file:///home/fxxyz73/tanzanite-halium/docs/FLASHING_GUIDE_id.md): Complete flashing and dual-boot installation guide (Bahasa Indonesia).

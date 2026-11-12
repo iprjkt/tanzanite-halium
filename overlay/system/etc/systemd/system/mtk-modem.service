@@ -1,0 +1,14 @@
+[Unit]
+Description=MediaTek Modem and Telephony Initialization
+After=device-hacks.service lxc-android-config.service
+Wants=ofono.service
+Before=ofono.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=240
+ExecStart=/usr/libexec/lxc-android-config/mtk-modem
+
+[Install]
+WantedBy=multi-user.target

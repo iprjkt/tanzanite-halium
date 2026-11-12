@@ -85,7 +85,12 @@ GROUPS=(
   "sensorhub hf_manager"
 
   # --- connectivity ---
-  "btif_drv connadp cfg80211"
+  "emi-mpu emi device-apc-common irq-dbg mtk_mdpm pmic_lbat_service
+   mtk_dynamic_loading_throttling mtk_pbm ccci_util_lib ccci_auxadc
+   rps_perf ccmni ccci_md_all mddp
+   btif_drv connadp cfg80211 wmt_drv
+   bt_drv_connac1x wmt_chrdev_wifi wlan_drv_gen4m_6789
+   hci_vhci bnep"
 
   # --- thermal / battery ---
   "soc_temp_lvts pmic_temp board_temp thermal-generic-adc thermal_trace

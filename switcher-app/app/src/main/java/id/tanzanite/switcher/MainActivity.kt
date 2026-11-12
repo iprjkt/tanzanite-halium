@@ -168,13 +168,13 @@ object RootShell {
             BDIR="/sdcard/.backup"
             [ ! -d "${'$'}BDIR" ] && [ -d "/data/media/0/.backup" ] && BDIR="/data/media/0/.backup"
             STOCK_OK=0
-            if [ -s "${'$'}BDIR/boot_stock.img" ] && [ -s "${'$'}BDIR/vendor_boot_stock.img" ] && [ -s "${'$'}BDIR/dtbo_stock.img" ]; then
+            if [ -s "${'$'}BDIR/boot_stock.img" ]; then
               STOCK_OK=1
             fi
             HALIUM_OK=0
-            if [ -s "${'$'}BDIR/boot_halium.img" ] && [ -s "${'$'}BDIR/vendor_boot_halium.img" ] && [ -s "${'$'}BDIR/dtbo_halium.img" ]; then
+            if [ -s "${'$'}BDIR/boot_halium.img" ]; then
               HALIUM_OK=1
-            elif [ -s "/data/ubuntu/partitions/boot.img" ] && [ -s "/data/ubuntu/partitions/vendor_boot.img" ]; then
+            elif [ -s "/data/ubuntu/partitions/boot.img" ]; then
               HALIUM_OK=1
             fi
 
@@ -521,20 +521,18 @@ fun MainAppScreen(
     fun backupCurrentStock() {
         if (isBusy) return
         isBusy = true
-        consoleLog = "[*] Backing up current slot (${status.activeSlot}) boot, vendor_boot, dtbo..."
+        consoleLog = "[*] Backing up current slot (${status.activeSlot}) boot..."
         scope.launch {
             val script = """
                 set -e
                 SLOT="${status.activeSlot}"
                 BDIR="/sdcard/.backup"
                 mkdir -p "${'$'}BDIR"
-                for p in boot vendor_boot dtbo; do
-                  PART="/dev/block/by-name/${'$'}{p}${'$'}{SLOT}"
-                  [ -e "${'$'}PART" ] || { echo "[!] Missing partition ${'$'}PART"; exit 1; }
-                  dd if="${'$'}PART" of="${'$'}BDIR/${'$'}{p}_stock.img" bs=4M
-                  [ -s "${'$'}BDIR/${'$'}{p}_stock.img" ] || { echo "[!] Backup failed for ${'$'}p"; exit 1; }
-                  echo "[+] Saved ${'$'}BDIR/${'$'}{p}_stock.img"
-                done
+                PART="/dev/block/by-name/boot${'$'}{SLOT}"
+                [ -e "${'$'}PART" ] || { echo "[!] Missing partition ${'$'}PART"; exit 1; }
+                dd if="${'$'}PART" of="${'$'}BDIR/boot_stock.img" bs=4M
+                [ -s "${'$'}BDIR/boot_stock.img" ] || { echo "[!] Backup failed for boot"; exit 1; }
+                echo "[+] Saved ${'$'}BDIR/boot_stock.img"
                 sync
                 echo "[+] Stock HyperOS boot backup complete!"
             """.trimIndent()
@@ -557,42 +555,28 @@ fun MainAppScreen(
                 BDIR="/sdcard/.backup"
                 mkdir -p "${'$'}BDIR"
                 # 1. Auto-backup stock if not yet backed up
-                for p in boot vendor_boot dtbo; do
-                  if [ ! -s "${'$'}BDIR/${'$'}{p}_stock.img" ]; then
-                    echo "[*] Creating initial stock backup for ${'$'}{p}${'$'}{SLOT}..."
-                    dd if="/dev/block/by-name/${'$'}{p}${'$'}{SLOT}" of="${'$'}BDIR/${'$'}{p}_stock.img" bs=4M
-                  fi
-                done
-
-                # 2. Locate Halium images
-                BOOT_IMG="${'$'}BDIR/boot_halium.img"
-                VBOOT_IMG="${'$'}BDIR/vendor_boot_halium.img"
-                DTBO_IMG="${'$'}BDIR/dtbo_halium.img"
-                if [ ! -s "${'$'}BOOT_IMG" ] && [ -s "/data/ubuntu/partitions/boot.img" ]; then
-                  BOOT_IMG="/data/ubuntu/partitions/boot.img"
-                  VBOOT_IMG="/data/ubuntu/partitions/vendor_boot.img"
-                  DTBO_IMG="/data/ubuntu/partitions/dtbo.img"
+                if [ ! -s "${'$'}BDIR/boot_stock.img" ]; then
+                  echo "[*] Creating initial stock backup for boot${'$'}{SLOT}..."
+                  dd if="/dev/block/by-name/boot${'$'}{SLOT}" of="${'$'}BDIR/boot_stock.img" bs=4M
                 fi
 
-                for f in "${'$'}BOOT_IMG" "${'$'}VBOOT_IMG" "${'$'}DTBO_IMG"; do
-                  [ -s "${'$'}f" ] || { echo "[!] Missing or empty Halium image: ${'$'}f"; exit 1; }
-                done
+                # 2. Locate Halium boot image
+                BOOT_IMG="${'$'}BDIR/boot_halium.img"
+                if [ ! -s "${'$'}BOOT_IMG" ] && [ -s "/data/ubuntu/partitions/boot.img" ]; then
+                  BOOT_IMG="/data/ubuntu/partitions/boot.img"
+                fi
 
-                # 3. Validate target block devices & flash
-                for p in boot vendor_boot dtbo; do
-                  PART="/dev/block/by-name/${'$'}{p}${'$'}{SLOT}"
-                  [ -e "${'$'}PART" ] || { echo "[!] Target partition ${'$'}PART not found!"; exit 1; }
-                  blockdev --setrw "${'$'}PART" 2>/dev/null || true
-                done
+                [ -s "${'$'}BOOT_IMG" ] || { echo "[!] Missing or empty Halium image: ${'$'}BOOT_IMG"; exit 1; }
 
-                dd if="${'$'}BOOT_IMG" of="/dev/block/by-name/boot${'$'}{SLOT}" bs=4M
+                # 3. Validate target block device & flash
+                PART="/dev/block/by-name/boot${'$'}{SLOT}"
+                [ -e "${'$'}PART" ] || { echo "[!] Target partition ${'$'}PART not found!"; exit 1; }
+                blockdev --setrw "${'$'}PART" 2>/dev/null || true
+
+                dd if="${'$'}BOOT_IMG" of="${'$'}PART" bs=4M
                 echo "[+] Flashed boot${'$'}{SLOT} <- ${'$'}BOOT_IMG"
-                dd if="${'$'}VBOOT_IMG" of="/dev/block/by-name/vendor_boot${'$'}{SLOT}" bs=4M
-                echo "[+] Flashed vendor_boot${'$'}{SLOT} <- ${'$'}VBOOT_IMG"
-                dd if="${'$'}DTBO_IMG" of="/dev/block/by-name/dtbo${'$'}{SLOT}" bs=4M
-                echo "[+] Flashed dtbo${'$'}{SLOT} <- ${'$'}DTBO_IMG"
                 sync
-                echo "[+] All Halium partitions flashed successfully!"
+                echo "[+] Halium boot partition flashed successfully!"
                 if [ "${if (rebootNow) "1" else "0"}" = "1" ]; then
                   echo "[*] Rebooting into Ubuntu Touch..."
                   svc power reboot || reboot
@@ -609,23 +593,21 @@ fun MainAppScreen(
     fun restoreStockAndroid(rebootNow: Boolean) {
         if (isBusy) return
         isBusy = true
-        consoleLog = "[*] Restoring Stock HyperOS images to slot ${status.activeSlot}..."
+        consoleLog = "[*] Restoring Stock HyperOS boot image to slot ${status.activeSlot}..."
         scope.launch {
             val script = """
                 set -e
                 SLOT="${status.activeSlot}"
                 BDIR="/sdcard/.backup"
-                for p in boot vendor_boot dtbo; do
-                  IMG="${'$'}BDIR/${'$'}{p}_stock.img"
-                  PART="/dev/block/by-name/${'$'}{p}${'$'}{SLOT}"
-                  [ -s "${'$'}IMG" ] || { echo "[!] Backup image ${'$'}IMG missing or empty!"; exit 1; }
-                  [ -e "${'$'}PART" ] || { echo "[!] Target partition ${'$'}PART missing!"; exit 1; }
-                  blockdev --setrw "${'$'}PART" 2>/dev/null || true
-                  dd if="${'$'}IMG" of="${'$'}PART" bs=4M
-                  echo "[+] Restored ${'$'}{p}${'$'}{SLOT} <- ${'$'}IMG"
-                done
+                IMG="${'$'}BDIR/boot_stock.img"
+                PART="/dev/block/by-name/boot${'$'}{SLOT}"
+                [ -s "${'$'}IMG" ] || { echo "[!] Backup image ${'$'}IMG missing or empty!"; exit 1; }
+                [ -e "${'$'}PART" ] || { echo "[!] Target partition ${'$'}PART missing!"; exit 1; }
+                blockdev --setrw "${'$'}PART" 2>/dev/null || true
+                dd if="${'$'}IMG" of="${'$'}PART" bs=4M
+                echo "[+] Restored boot${'$'}{SLOT} <- ${'$'}IMG"
                 sync
-                echo "[+] Stock HyperOS boot partitions restored!"
+                echo "[+] Stock HyperOS boot partition restored!"
                 if [ "${if (rebootNow) "1" else "0"}" = "1" ]; then
                   echo "[*] Rebooting into Android (HyperOS)..."
                   svc power reboot || reboot
@@ -738,7 +720,7 @@ fun MainAppScreen(
 
     SuperDialog(
         title = "Boot to Ubuntu Touch?",
-        summary = "This will flash Halium boot, vendor_boot, and dtbo to active slot (${status.activeSlot}) and immediately reboot the device.",
+        summary = "This will flash Halium boot to active slot (${status.activeSlot}) and immediately reboot the device.",
         show = showConfirmUbuntu,
         onDismissRequest = { MiuixPopupUtils.dismissDialog(showConfirmUbuntu) }
     ) {
@@ -771,7 +753,7 @@ fun MainAppScreen(
 
     SuperDialog(
         title = "Restore Stock HyperOS?",
-        summary = "This will flash boot_stock.img, vendor_boot_stock.img, and dtbo_stock.img from /sdcard/.backup/ back to slot ${status.activeSlot}.",
+        summary = "This will flash boot_stock.img from /sdcard/.backup/ back to slot ${status.activeSlot}.",
         show = showConfirmAndroid,
         onDismissRequest = { MiuixPopupUtils.dismissDialog(showConfirmAndroid) }
     ) {
@@ -887,7 +869,7 @@ fun SwitcherContent(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Automatically backs up Stock HyperOS partitions if needed, flashes Halium boot, vendor_boot, and dtbo to active slot (${status.activeSlot}), and reboots into Ubuntu Touch.",
+                    text = "Automatically backs up Stock HyperOS boot partition if needed, flashes Halium boot to active slot (${status.activeSlot}), and reboots into Ubuntu Touch.",
                     fontSize = 13.sp,
                     color = Color.Gray
                 )
@@ -914,7 +896,7 @@ fun SwitcherContent(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Save current Android boot/vendor_boot/dtbo to /sdcard/.backup/ or restore them to slot ${status.activeSlot}.",
+                    text = "Save current Android boot to /sdcard/.backup/ or restore it to slot ${status.activeSlot}.",
                     fontSize = 13.sp,
                     color = Color.Gray
                 )
@@ -1320,7 +1302,7 @@ fun AboutContent(
                 )
                 SuperArrow(
                     title = "Dual-Boot Target",
-                    summary = "Separate boot/dtbo/rootfs partitions on Slot A",
+                    summary = "Separate boot/rootfs partitions on Slot A",
                     rightText = status.activeSlot,
                     onClick = {}
                 )

@@ -1,0 +1,14 @@
+[Unit]
+Description=MediaTek WLAN Assistant
+After=wmt-launcher.service load-wlan-fmradio-modules.service
+Requires=wmt-launcher.service
+Before=device-hacks.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/lxc-attach -n android -- /vendor/bin/wlan_assistant
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Load MediaTek MT6789 Audio and SCP Kernel Modules
+After=local-fs.target
+Before=device-hacks.service pulseaudio.service sound.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/load-audio-modules.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=basic.target
