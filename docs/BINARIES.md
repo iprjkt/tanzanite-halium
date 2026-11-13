@@ -74,6 +74,7 @@ Recovery-side utilities bundled into the installer zip:
 | `busybox` | aarch64 static busybox, shell utilities inside recovery |
 | `avbctl` | Android Verified Boot control |
 | `dump.erofs`, `mkfs.erofs`, `fsck.erofs`, `extract.erofs` | unpack/repack the EROFS `vendor` partition to patch its fstab |
+| `userdata_wrap` | static ARM64 helper creating a 1:1 dm-linear wrapper for unencrypted userdata (enables DSU / gsid support) |
 | `lptools` | logical partition helpers |
 
 ## `flashable_zips/vbmeta/*.img` (24 MB)

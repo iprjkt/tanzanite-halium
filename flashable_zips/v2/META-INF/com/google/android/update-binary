@@ -213,8 +213,13 @@ if [ "$VENDOR_FS" = "ext4" ]; then
       fi
     done
 
+    # Check if userdata_wrap is installed for DSU support
+    if [ ! -f "$MNT_VENDOR/bin/userdata_wrap" ] || ! "$BB" grep -q "userdata_wrap" "$MNT_VENDOR/etc/init/hw/init.mt6789.rc" 2>/dev/null; then
+      ALREADY_PATCHED=false
+    fi
+
     if [ "$FOUND_DATA_ENTRY" = "true" ] && [ "$ALREADY_PATCHED" = "true" ]; then
-      ui_print "[+] Vendor fstab is ALREADY configured for unencrypted ext4 userdata!"
+      ui_print "[+] Vendor fstab is ALREADY configured for unencrypted ext4 userdata and DSU support!"
       ui_print "    $DATA_LINE"
       ui_print "[*] Skipping vendor patch."
       umount "$MNT_VENDOR" 2>/dev/null || true
@@ -231,6 +236,19 @@ if [ "$VENDOR_FS" = "ext4" ]; then
         fi
       done
       [ "$PATCHED_ANY" = "true" ] || abort "No active /data fstab entry found to patch in ext4 vendor!"
+
+      if [ -f "$WORK/tools/userdata_wrap" ]; then
+        ui_print "    [*] Installing userdata_wrap for DSU compatibility..."
+        cp -f "$WORK/tools/userdata_wrap" "$MNT_VENDOR/bin/userdata_wrap"
+        chmod 755 "$MNT_VENDOR/bin/userdata_wrap"
+        chown 0:2000 "$MNT_VENDOR/bin/userdata_wrap" 2>/dev/null || true
+        if [ -f "$MNT_VENDOR/etc/init/hw/init.mt6789.rc" ] && ! "$BB" grep -q "userdata_wrap" "$MNT_VENDOR/etc/init/hw/init.mt6789.rc"; then
+          "$BB" sed -i '/mount_all --late/i \    exec - root root -- /vendor/bin/userdata_wrap' "$MNT_VENDOR/etc/init/hw/init.mt6789.rc"
+        fi
+        if [ -f "$MNT_VENDOR/etc/selinux/vendor_file_contexts" ] && ! "$BB" grep -q "userdata_wrap" "$MNT_VENDOR/etc/selinux/vendor_file_contexts"; then
+          echo '/vendor/bin/userdata_wrap u:object_r:vold_exec:s0' >> "$MNT_VENDOR/etc/selinux/vendor_file_contexts"
+        fi
+      fi
       sync
       umount "$MNT_VENDOR" 2>/dev/null || true
       rmdir "$MNT_VENDOR" 2>/dev/null || true
@@ -282,8 +300,13 @@ else
     fi
   done
 
+  # Check if userdata_wrap is installed for DSU support
+  if [ ! -f "$WORK/extracted/bin/userdata_wrap" ] || ! "$BB" grep -q "userdata_wrap" "$WORK/extracted/etc/init/hw/init.mt6789.rc" 2>/dev/null; then
+    ALREADY_PATCHED=false
+  fi
+
   if [ "$FOUND_DATA_ENTRY" = "true" ] && [ "$ALREADY_PATCHED" = "true" ]; then
-    ui_print "[+] Vendor fstab is ALREADY configured for unencrypted ext4 userdata!"
+    ui_print "[+] Vendor fstab is ALREADY configured for unencrypted ext4 userdata and DSU support!"
     ui_print "    $DATA_LINE"
     ui_print "[*] Skipping vendor repacking and flashing."
     rm -rf "$WORK/extracted" "$WORK/vendor_orig.img"
@@ -301,19 +324,34 @@ else
     done
     [ "$PATCHED_ANY" = "true" ] || abort "No active /data fstab entry found to patch in vendor!"
 
+    # Install userdata_wrap for DSU compatibility
+    if [ -f "$WORK/tools/userdata_wrap" ]; then
+      ui_print "[*] Installing userdata_wrap for DSU support..."
+      cp -f "$WORK/tools/userdata_wrap" "$WORK/extracted/bin/userdata_wrap"
+      chmod 755 "$WORK/extracted/bin/userdata_wrap"
+      chown 0:2000 "$WORK/extracted/bin/userdata_wrap" 2>/dev/null || true
+      if [ -f "$WORK/extracted/etc/init/hw/init.mt6789.rc" ] && ! "$BB" grep -q "userdata_wrap" "$WORK/extracted/etc/init/hw/init.mt6789.rc"; then
+        "$BB" sed -i '/mount_all --late/i \    exec - root root -- /vendor/bin/userdata_wrap' "$WORK/extracted/etc/init/hw/init.mt6789.rc"
+      fi
+      if [ -f "$WORK/extracted/etc/selinux/vendor_file_contexts" ] && ! "$BB" grep -q "userdata_wrap" "$WORK/extracted/etc/selinux/vendor_file_contexts"; then
+        echo '/vendor/bin/userdata_wrap u:object_r:vold_exec:s0' >> "$WORK/extracted/etc/selinux/vendor_file_contexts"
+      fi
+    fi
+
     # 6. Repack EROFS
     ui_print "[*] Repacking EROFS image with mkfs.erofs (-zlz4hc,level=12)..."
     FC_FILE="$WORK/extracted/etc/selinux/vendor_file_contexts"
     COMBINED_FC="$WORK/combined_file_contexts"
     if [ -f "$FC_FILE" ]; then
+      "$BB" grep -v -E '^/vendor\(\/\.\*\)\?[[:space:]]' "$FC_FILE" > "$WORK/clean_vendor_fc" 2>/dev/null || cp -f "$FC_FILE" "$WORK/clean_vendor_fc"
       if [ -f "/plat_file_contexts" ]; then
-        cat "/plat_file_contexts" "$FC_FILE" > "$COMBINED_FC"
+        cat "/plat_file_contexts" "$WORK/clean_vendor_fc" > "$COMBINED_FC"
       elif [ -f "/system/etc/selinux/plat_file_contexts" ]; then
-        cat "/system/etc/selinux/plat_file_contexts" "$FC_FILE" > "$COMBINED_FC"
+        cat "/system/etc/selinux/plat_file_contexts" "$WORK/clean_vendor_fc" > "$COMBINED_FC"
       else
         echo '/(vendor|system/vendor)(/.*)? u:object_r:vendor_file:s0' > "$COMBINED_FC"
         echo '/(vendor|system/vendor)/bin/boringssl_self_test(32|64) u:object_r:vendor_boringssl_self_test_exec:s0' >> "$COMBINED_FC"
-        cat "$FC_FILE" >> "$COMBINED_FC"
+        cat "$WORK/clean_vendor_fc" >> "$COMBINED_FC"
       fi
       "$WORK/tools/mkfs.erofs" -zlz4hc,level=12 -T 1230768000 -U 49911ede-c544-3978-11fe-1cb76c7de057 --mount-point=/vendor --file-contexts="$COMBINED_FC" "$WORK/vendor_patched.img" "$WORK/extracted" >/dev/null
     else
@@ -386,8 +424,8 @@ else
   fi
 fi
 
-# 8. Handle VBMETA (patch)
-VBMETA_MODE="patch"
+# 8. Handle VBMETA (disable)
+VBMETA_MODE="disable"
 if [ "$VBMETA_MODE" = "prebuilt" ] || [ -f "$WORK/vbmeta/vbmeta.img" ]; then
   ui_print "[*] Flashing pre-disabled vbmeta images to slot $SLOT..."
   for part in vbmeta vbmeta_system vbmeta_vendor; do

@@ -77,7 +77,7 @@ Step-by-step installation guide for setting up **Ubuntu Touch 20.04 (Focal Fossa
 3. In recovery, go to **Install** / **Files**.
 4. Select `tanzanite-halium.zip` and swipe to confirm.
 5. The installer will execute the following steps automatically:
-   - Patches `/vendor/etc/fstab.mt6789` to mount userdata as unencrypted ext4.
+   - Patches `/vendor/etc/fstab.mt6789` to mount userdata as unencrypted ext4 and installs `userdata_wrap` (DSU / gsid support in HyperOS).
    - Disables AVB verification and dm-verity on `vbmeta`, `vbmeta_system`, and `vbmeta_vendor`.
    - Backs up stock `boot` partition to `/sdcard/.backup/` while leaving `vendor_boot` (recovery) and `dtbo` untouched.
    - Extracts Ubuntu Touch rootfs and the Halium container into `/data/ubuntu`.
