@@ -84,26 +84,30 @@ static double get_sanitized_capacity(GUdevDevice *device, double orig_cap) {
     if (orig_cap > 2.0)
         return orig_cap;
 
+    /* Check if MediaTek fuelgauged has already initialized the gauge.
+     * Before fuelgauged starts, /sys/class/power_supply/bms/capacity is -1
+     * and battery/capacity is a dummy 1. Once fuelgauged is running,
+     * bms/capacity is >= 0 and matches the real GM3.0 UI SOC. */
+    FILE *f = fopen("/sys/class/power_supply/bms/capacity", "r");
+    if (f) {
+        double bms_cap = -1.0;
+        if (fscanf(f, "%lf", &bms_cap) == 1 && bms_cap >= 0.0) {
+            fclose(f);
+            return bms_cap;
+        }
+        fclose(f);
+    }
+
     if (!real_g_udev_device_get_sysfs_attr_as_double_uncached)
         real_g_udev_device_get_sysfs_attr_as_double_uncached = dlsym(RTLD_NEXT, "g_udev_device_get_sysfs_attr_as_double_uncached");
 
     double volt = real_g_udev_device_get_sysfs_attr_as_double_uncached ?
                   real_g_udev_device_get_sysfs_attr_as_double_uncached(device, "voltage_now") : 0.0;
 
-    /* If cell voltage is > 3.5V, battery is healthy and has substantial charge */
+    /* Early-boot guard while fuelgauged is still starting (bms/capacity == -1):
+     * if cell voltage is > 3.5V, prevent upowerd from triggering an immediate
+     * low-battery shutdown due to the uninitialized dummy capacity=1. */
     if (volt > 3500000.0) {
-        /* 1. Try reading bms hardware capacity directly */
-        FILE *f = fopen("/sys/class/power_supply/bms/capacity", "r");
-        if (f) {
-            double bms_cap = 0.0;
-            if (fscanf(f, "%lf", &bms_cap) == 1 && bms_cap > 2.0) {
-                fclose(f);
-                return bms_cap;
-            }
-            fclose(f);
-        }
-
-        /* 2. Fallback to Open Circuit Voltage estimation table for 4.4V cell */
         if (volt >= 4350000.0) return 98.0;
         if (volt >= 4200000.0) return 85.0;
         if (volt >= 4050000.0) return 70.0;

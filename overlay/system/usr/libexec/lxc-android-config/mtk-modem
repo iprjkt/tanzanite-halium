@@ -23,6 +23,10 @@ for i in $(seq 1 50); do
     sleep 0.2
 done
 
+# 3b. Ensure MediaTek GM3.0 fuel gauge daemon and NVRAM calibration sync run
+getprop init.svc.fuelgauged | grep -q running || setprop ctl.start fuelgauged
+setprop ctl.start fuelgauged_nvram
+
 # 4. Start CCCI RPC and MDINIT services
 getprop init.svc.vendor.ccci_rpcd | grep -q running || setprop ctl.start vendor.ccci_rpcd
 getprop init.svc.ccci_mdinit | grep -q running || setprop ctl.start ccci_mdinit
