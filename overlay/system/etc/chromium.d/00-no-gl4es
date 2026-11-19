@@ -1,0 +1,18 @@
+# Chromium uses native ANGLE/GLES and conflicts with gl4es desktop GLX wrapper.
+if [ -n "${LD_LIBRARY_PATH:-}" ]; then
+    LD_LIBRARY_PATH="$(printf '%s' "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -vx '/usr/local/lib/gl4es' | paste -sd ':' -)"
+    if [ -n "$LD_LIBRARY_PATH" ]; then
+        export LD_LIBRARY_PATH
+    else
+        unset LD_LIBRARY_PATH
+    fi
+fi
+
+# Use native Wayland + libhybris ANGLE GLES + Wayland OSK when authorized by
+# lomiri-app-launch; fall back to X11 (Xwayland) when launched from a shell.
+if [ "${APP_ID:-}" = "chromium" ] && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    export EGL_PLATFORM=wayland
+    export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --ozone-platform=wayland --use-gl=angle --use-angle=gles-egl --ignore-gpu-blocklist --enable-wayland-ime"
+elif [ -n "${DISPLAY:-}" ]; then
+    export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --ozone-platform=x11"
+fi
