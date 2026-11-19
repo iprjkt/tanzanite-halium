@@ -19,8 +19,14 @@ if [ ! -f "$ROOT_DIR/overlay/system/usr/local/lib/libupower_filter_bms.so" ]; th
     echo "[-] libupower_filter_bms.so missing, building..."
     gcc -shared -fPIC -O2 "$ROOT_DIR/overlay/system/usr/local/bin/upower_filter_bms.c" -o "$ROOT_DIR/overlay/system/usr/local/lib/libupower_filter_bms.so" -ldl
 fi
+if [ ! -f "$ROOT_DIR/overlay/system/usr/local/lib/libxwayland_landscape_fix.so" ]; then
+    echo "[-] libxwayland_landscape_fix.so missing, building..."
+    gcc -shared -fPIC -O2 "$ROOT_DIR/overlay/system/usr/local/bin/xwayland_landscape_fix.c" -o "$ROOT_DIR/overlay/system/usr/local/lib/libxwayland_landscape_fix.so" -ldl
+fi
 chmod 755 "$ROOT_DIR/overlay/system/usr/local/bin/tanzanite-flashlight-bridge" \
-          "$ROOT_DIR/overlay/system/usr/local/lib/libupower_filter_bms.so"
+          "$ROOT_DIR/overlay/system/usr/local/lib/libupower_filter_bms.so" \
+          "$ROOT_DIR/overlay/system/usr/local/lib/libxwayland_landscape_fix.so" \
+          "$ROOT_DIR/overlay/system/usr/libexec/Xwayland.lomiri"
 
 # 2. Build device_tanzanite_system.tar.gz
 echo "[*] Building device_tanzanite_system.tar.gz from overlay/system..."

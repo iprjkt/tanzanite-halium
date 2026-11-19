@@ -14,12 +14,12 @@ tanzanite:
   SingleColorLedSysfsPath: /sys/class/leds/green
   PulseaudioModulesDroid_ExtraCardArgs: "hw_volume=false rate=48000"
   FilesystemEncryption: false
-  CollapsedPanelHeight: 52
+  CollapsedPanelHeight: 78
   DisplayCutoutsCollapsed:
-    - 0 0 16 52
-    - 324 0 58 52
-    - 704 0 16 52
+    - 0 0 24 78
+    - 496 0 88 78
+    - 1056 0 24 78
   DisplayCutoutsExpanded:
-    - 0 0 16 98
-    - 324 0 72 98
-    - 704 0 16 98
+    - 0 0 24 128
+    - 496 0 88 128
+    - 1056 0 24 128

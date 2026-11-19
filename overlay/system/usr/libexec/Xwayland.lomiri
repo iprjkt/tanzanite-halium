@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Copyright (C) 2023 Alfred Neumayer <dev.beidl@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# The intention behind this wrapper is to set the EGL_PLATFORM to "wayland"
+# which might be a necessity depending on the driver stack in use (mostly hybris).
+# Additionally it allows to selectively en-/disable certain behavior of Xwayland
+# using device-info config files.
+
+if [ -f /system/build.prop ]; then
+    export EGL_PLATFORM=wayland
+fi
+
+# Prevent Xwayland Screen 0 from clamping landscape touch/mouse input to
+# Portrait width (1080px on 1080x2400) when Lomiri rotates QML in software.
+if [ -f /usr/local/lib/libxwayland_landscape_fix.so ]; then
+    export LD_PRELOAD="${LD_PRELOAD:+$LD_PRELOAD:}/usr/local/lib/libxwayland_landscape_fix.so"
+fi
+
+# Additional arguments sourced from device-info config
+ARGS=""
+
+XWAYLAND_SHM=$(device-info get XwaylandShm)
+HAS_XWAYLAND_SHM=$?
+
+# Default to shm mode on for the phone
+if [ "$HAS_XWAYLAND_SHM" = "1" ]; then
+    [ -f /system/build.prop ] && ARGS="$ARGS -shm"
+elif [ "$HAS_XWAYLAND_SHM" = "0" ]; then
+    if [ "$XWAYLAND_SHM" = "true" ]; then
+        ARGS="$ARGS -shm"
+    fi
+fi
+
+exec /usr/bin/Xwayland $@ $ARGS

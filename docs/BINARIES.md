@@ -57,12 +57,17 @@ Small helpers written for this device (C sources are committed alongside them in
   `ayatana-indicator-power`.
 - `libupower_filter_bms.so` — `LD_PRELOAD` shim that filters bogus battery devices out of UPower's
   GUdev query so the fuel gauge reports correctly.
+- `libxwayland_landscape_fix.so`: `LD_PRELOAD` shim loaded by `/usr/libexec/Xwayland.lomiri` that
+  squares `wl_output` / `zxdg_output_v1` dimensions (`2400x2400`) so Xwayland does not clamp
+  landscape touch and mouse coordinates to portrait width (`1080px`).
 
 Rebuild on an aarch64 host:
 
 ```bash
 gcc -shared -fPIC -O2 overlay/system/usr/local/bin/upower_filter_bms.c \
     -o overlay/system/usr/local/lib/libupower_filter_bms.so -ldl
+gcc -shared -fPIC -O2 overlay/system/usr/local/bin/xwayland_landscape_fix.c \
+    -o overlay/system/usr/local/lib/libxwayland_landscape_fix.so -ldl
 ```
 
 ## `flashable_zips/common/tools/` (~5 MB)
