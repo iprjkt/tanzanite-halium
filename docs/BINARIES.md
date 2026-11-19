@@ -60,6 +60,9 @@ Small helpers written for this device (C sources are committed alongside them in
 - `libxwayland_landscape_fix.so`: `LD_PRELOAD` shim loaded by `/usr/libexec/Xwayland.lomiri` that
   squares `wl_output` / `zxdg_output_v1` dimensions (`2400x2400`) so Xwayland does not clamp
   landscape touch and mouse coordinates to portrait width (`1080px`).
+- `overlay/system/usr/local/lib/gl4es/libGL.so.1`: `ptitSeb/gl4es` v1.1.7 (`-DHYBRIS=ON -DLIBGL_FB=3`)
+  translating desktop OpenGL 2.1 to hardware Mali-G57 GLES 2.0/3.2 via libhybris GLVND EGL/GLES.
+  Rebuild with `./tools/gl4es/build_gl4es.sh`.
 
 Rebuild on an aarch64 host:
 

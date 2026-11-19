@@ -24,8 +24,10 @@ if [ ! -f "$ROOT_DIR/overlay/system/usr/local/lib/libxwayland_landscape_fix.so" 
     gcc -shared -fPIC -O2 "$ROOT_DIR/overlay/system/usr/local/bin/xwayland_landscape_fix.c" -o "$ROOT_DIR/overlay/system/usr/local/lib/libxwayland_landscape_fix.so" -ldl
 fi
 chmod 755 "$ROOT_DIR/overlay/system/usr/local/bin/tanzanite-flashlight-bridge" \
+          "$ROOT_DIR/overlay/system/usr/local/bin/gl4es-run" \
           "$ROOT_DIR/overlay/system/usr/local/lib/libupower_filter_bms.so" \
           "$ROOT_DIR/overlay/system/usr/local/lib/libxwayland_landscape_fix.so" \
+          "$ROOT_DIR/overlay/system/usr/local/lib/gl4es/libGL.so.1" \
           "$ROOT_DIR/overlay/system/usr/libexec/Xwayland.lomiri"
 
 # 2. Build device_tanzanite_system.tar.gz

@@ -23,6 +23,16 @@ if [ -f /system/build.prop ]; then
     export EGL_PLATFORM=wayland
 fi
 
+# Keep Xwayland linked against the system GLVND libGL.so.1 rather than gl4es.
+if [ -n "${LD_LIBRARY_PATH:-}" ]; then
+    LD_LIBRARY_PATH="$(printf '%s' "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -vx '/usr/local/lib/gl4es' | paste -sd ':' -)"
+    if [ -n "$LD_LIBRARY_PATH" ]; then
+        export LD_LIBRARY_PATH
+    else
+        unset LD_LIBRARY_PATH
+    fi
+fi
+
 # Prevent Xwayland Screen 0 from clamping landscape touch/mouse input to
 # Portrait width (1080px on 1080x2400) when Lomiri rotates QML in software.
 if [ -f /usr/local/lib/libxwayland_landscape_fix.so ]; then

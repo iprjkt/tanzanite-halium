@@ -1,0 +1,22 @@
+#!/bin/sh
+# Run a Linux desktop application with gl4es hardware OpenGL + libhybris EGL/GLES.
+if [ "$#" -eq 0 ]; then
+    echo "Usage: gl4es-run <command> [args...]" >&2
+    exit 1
+fi
+
+export LD_LIBRARY_PATH="/usr/local/lib/gl4es${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+if [ -f /usr/lib/aarch64-linux-gnu/libtls-padding.so ]; then
+    case ":${LD_PRELOAD:-}:" in
+        *":/usr/lib/aarch64-linux-gnu/libtls-padding.so:"*) ;;
+        *) export LD_PRELOAD="/usr/lib/aarch64-linux-gnu/libtls-padding.so${LD_PRELOAD:+:$LD_PRELOAD}" ;;
+    esac
+fi
+export LIBGL_EGL="/usr/lib/aarch64-linux-gnu/libEGL.so.1"
+export LIBGL_GLES="/usr/lib/aarch64-linux-gnu/libGLESv2.so.2"
+export LIBGL_FB="${LIBGL_FB:-3}"
+export LIBGL_ES="${LIBGL_ES:-2}"
+export LIBGL_NOBANNER="${LIBGL_NOBANNER:-1}"
+export EGL_PLATFORM="${EGL_PLATFORM:-wayland}"
+
+exec "$@"
